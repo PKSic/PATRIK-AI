@@ -83,25 +83,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }, [subTab, token]);
 
-  // Загрузка списка диалогов поддержки
-  const loadChats = async () => {
-    setLoadingChats(true);
+  // Загрузка списка диалогов поддержки (с защитой от моргания)
+  const loadChats = async (isManual = false) => {
+    if (isManual) setLoadingChats(true);
     try {
       const res = await fetch('/api/admin/support/chats', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        setChats(Array.isArray(data) ? data : []);
-        // Если чат не выбран, но есть чаты — выберем первый
-        if (!selectedUserId && Array.isArray(data) && data.length > 0) {
-          setSelectedUserId(data[0].userId);
-        }
+        const incoming = Array.isArray(data) ? data : [];
+        setChats((prev) => {
+          // Если чаты не изменились, не создаём новый массив во избежание моргания UI
+          if (
+            prev.length === incoming.length &&
+            incoming.every(
+              (c, i) =>
+                c.userId === prev[i]?.userId &&
+                c.unreadCount === prev[i]?.unreadCount &&
+                c.lastMessageAt === prev[i]?.lastMessageAt &&
+                c.lastMessage === prev[i]?.lastMessage
+            )
+          ) {
+            return prev;
+          }
+          return incoming;
+        });
+        // Если чат не выбран, но есть чаты — выберем первый стабильно
+        setSelectedUserId((curr) => {
+          if (curr) return curr;
+          return incoming.length > 0 ? incoming[0].userId : null;
+        });
       }
     } catch (e) {
       console.warn('Failed to load support chats:', e);
     } finally {
-      setLoadingChats(false);
+      if (isManual) setLoadingChats(false);
     }
   };
 
@@ -127,10 +144,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             return merged;
           });
         }
-        // Обновляем бейдж непрочитанных у этого чата локально
-        setChats((prev) =>
-          prev.map((c) => (c.userId === userId ? { ...c, unreadCount: 0 } : c))
-        );
+        // Обновляем бейдж непрочитанных у этого чата только если он был > 0
+        setChats((prev) => {
+          const target = prev.find((c) => c.userId === userId);
+          if (!target || target.unreadCount === 0) return prev;
+          return prev.map((c) => (c.userId === userId ? { ...c, unreadCount: 0 } : c));
+        });
       }
     } catch (e) {
       console.warn('Failed to load chat messages:', e);
@@ -147,8 +166,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   useEffect(() => {
     if (subTab === 'support') {
-      loadChats();
-      const interval = setInterval(loadChats, 6000);
+      loadChats(false);
+      const interval = setInterval(() => loadChats(false), 8000);
       return () => clearInterval(interval);
     }
   }, [subTab, token]);
@@ -156,7 +175,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   useEffect(() => {
     if (subTab === 'support' && selectedUserId) {
       loadMessages(selectedUserId, false);
-      const interval = setInterval(() => loadMessages(selectedUserId, false), 4000);
+      const interval = setInterval(() => loadMessages(selectedUserId, false), 5000);
       return () => clearInterval(interval);
     }
   }, [subTab, selectedUserId, token]);
@@ -539,7 +558,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           {/* Telegram bot status banner */}
           <div className="p-4 rounded-2xl bg-gradient-to-r from-[#0297DE]/15 to-[#FC734D]/15 border border-[#0297DE]/30 backdrop-blur-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2.5 text-slate-800 dark:text-slate-200">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shadow-emerald-500/50"></span>
               <span>
                 <strong>Telegram-бот подключён:</strong> новые обращения пользователей приходят в
                 Telegram на ID <code className="font-mono text-[#0297DE]">5103486897</code>.
@@ -560,7 +579,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   Диалоги с клиентами ({chats.length})
                 </span>
                 <button
-                  onClick={loadChats}
+                  onClick={() => loadChats(true)}
                   title="Обновить список"
                   className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 cursor-pointer"
                 >
