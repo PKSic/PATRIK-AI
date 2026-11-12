@@ -55,10 +55,18 @@ export const LightBeams: React.FC<LightBeamsProps> = ({ className = '' }) => {
         // Плавный коэффициент смешивания: 1 в центре (оранжевый), 0 по краям (electric blue)
         const orangeMix = Math.exp(-Math.pow(distFromCenter * 1.9, 2));
 
-        // Интерполяция RGB между Electric Blue (2, 151, 222) и Оранжевым (252, 115, 77)
-        const r = Math.round(2 + (252 - 2) * orangeMix);
-        const g = Math.round(151 + (115 - 151) * orangeMix);
-        const b = Math.round(222 + (77 - 222) * orangeMix);
+        // Интерполяция RGB:
+        // Тёмная тема: Electric Blue (2, 151, 222) -> Оранжевый (252, 115, 77)
+        // Светлая тема (цвета с фото): Глубокий синий #09318D (9, 49, 141) -> Нежно-розовый #F59ACC (245, 154, 204)
+        const r = isDark
+          ? Math.round(2 + (252 - 2) * orangeMix)
+          : Math.round(9 + (245 - 9) * orangeMix);
+        const g = isDark
+          ? Math.round(151 + (115 - 151) * orangeMix)
+          : Math.round(49 + (154 - 49) * orangeMix);
+        const b = isDark
+          ? Math.round(222 + (77 - 222) * orangeMix)
+          : Math.round(141 + (204 - 141) * orangeMix);
 
         // Мелодичная волна (комбинация 3 гармоник, как эквалайзер под музыку)
         const wave1 = Math.sin(nx * 9.5 + t * 1.4);

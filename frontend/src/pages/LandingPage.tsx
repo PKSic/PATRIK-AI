@@ -60,19 +60,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section className="relative pt-14 pb-24 md:pt-20 md:pb-32 px-5 md:px-20">
         <div className="relative z-10 max-w-6xl mx-auto flex flex-col items-center text-center">
           {/* Pill Badge */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#0297DE]/15 border border-[#0297DE]/40 mb-7">
-            <Zap className="w-3.5 h-3.5 text-[#0297DE]" />
-            <span className="text-xs md:text-[13px] font-medium text-sky-600 dark:text-[#7DD3FC]">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#09318D]/10 dark:bg-[#0297DE]/15 border border-[#09318D]/25 dark:border-[#0297DE]/40 mb-7">
+            <Zap className="w-3.5 h-3.5 text-[#09318D] dark:text-[#0297DE]" />
+            <span className="text-xs md:text-[13px] font-medium text-[#09318D] dark:text-[#7DD3FC]">
               {siteConfig?.heroBadge || 'PATRIK AI 2.5 — Мультимодальная нейросеть нового поколения'}
             </span>
           </div>
 
           {/* Headline */}
-          <h1 className="text-4xl sm:text-5xl md:text-[62px] font-bold leading-[1.1] tracking-tight text-slate-900 dark:text-white max-w-4xl">
+          <h1 className="text-4xl sm:text-5xl md:text-[62px] font-bold leading-[1.1] tracking-tight text-[#09318D] dark:text-white max-w-4xl">
             {siteConfig?.heroTitle || 'Интеллект со скоростью вашей мысли.'}
           </h1>
 
-          <p className="mt-6 text-base md:text-lg text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed">
+          <p className="mt-6 text-base md:text-lg text-[#09318D]/75 dark:text-slate-300 max-w-2xl leading-relaxed">
             {siteConfig?.heroSubtitle ||
               'Генерируйте код, тексты, изображения и анализируйте данные в одном окне. Единая подписка вместо десятка разрозненных сервисов.'}
           </p>
@@ -81,14 +81,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="mt-8 flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
             <a
               href="#pricing"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-xl bg-[#FC734D] hover:bg-[#fb6338] text-white font-semibold text-base shadow-lg shadow-[#FC734D]/25 transition-all"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-xl bg-[#F59ACC] hover:bg-[#ee82bd] text-[#09318D] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] dark:text-white font-semibold text-base shadow-lg shadow-[#F59ACC]/30 dark:shadow-[#FC734D]/25 transition-all"
             >
               Выбрать подписку
               <ArrowRight className="w-4 h-4" />
             </a>
             <button
               onClick={() => onNavigate('dashboard')}
-              className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3.5 rounded-xl bg-white/80 dark:bg-[#132044]/80 hover:bg-white dark:hover:bg-[#192b59] border border-slate-200 dark:border-white/15 text-slate-900 dark:text-white font-medium text-base transition-all cursor-pointer"
+              className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3.5 rounded-xl bg-white/90 dark:bg-[#132044]/80 hover:bg-[#09318D]/5 dark:hover:bg-[#192b59] border border-[#09318D]/25 dark:border-white/15 text-[#09318D] dark:text-white font-medium text-base transition-all cursor-pointer"
             >
               Попробовать демо
             </button>
@@ -96,63 +96,60 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
           {/* Stats Row */}
           <div className="mt-14 w-full grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 text-left">
-            <div className="p-4 rounded-2xl bg-white/60 dark:bg-transparent border border-slate-200/70 dark:border-transparent">
-              <div className="text-2xl md:text-[28px] font-bold text-slate-900 dark:text-white">
+            <div className="p-4 rounded-2xl bg-white/85 dark:bg-transparent border border-[#09318D]/15 dark:border-transparent">
+              <div className="text-2xl md:text-[28px] font-bold text-[#09318D] dark:text-white">
                 {siteConfig?.stat1Value || '3x'}
               </div>
-              <div className="text-xs md:text-[13px] text-slate-500 dark:text-slate-400">
+              <div className="text-xs md:text-[13px] text-[#09318D]/70 dark:text-slate-400">
                 {siteConfig?.stat1Label || 'быстрее аналогичных моделей'}
               </div>
             </div>
-            <div className="p-4 rounded-2xl bg-white/60 dark:bg-transparent border border-slate-200/70 dark:border-transparent">
-              <div className="text-2xl md:text-[28px] font-bold text-[#0297DE]">
+            <div className="p-4 rounded-2xl bg-white/85 dark:bg-transparent border border-[#09318D]/15 dark:border-transparent">
+              <div className="text-2xl md:text-[28px] font-bold text-[#09318D] dark:text-[#0297DE]">
                 {siteConfig?.stat2Value || '99.9%'}
               </div>
-              <div className="text-xs md:text-[13px] text-slate-500 dark:text-slate-400">
+              <div className="text-xs md:text-[13px] text-[#09318D]/70 dark:text-slate-400">
                 {siteConfig?.stat2Label || 'доступность серверов'}
               </div>
             </div>
-            <div className="p-4 rounded-2xl bg-white/60 dark:bg-transparent border border-slate-200/70 dark:border-transparent md:text-right">
-              <div className="text-2xl md:text-[28px] font-bold text-slate-900 dark:text-white">
+            <div className="p-4 rounded-2xl bg-white/85 dark:bg-transparent border border-[#09318D]/15 dark:border-transparent md:text-right">
+              <div className="text-2xl md:text-[28px] font-bold text-[#09318D] dark:text-white">
                 {siteConfig?.stat3Value || '120K+'}
               </div>
-              <div className="text-xs md:text-[13px] text-slate-500 dark:text-slate-400">
+              <div className="text-xs md:text-[13px] text-[#09318D]/70 dark:text-slate-400">
                 {siteConfig?.stat3Label || 'активных подписчиков'}
               </div>
             </div>
-            <div className="p-4 rounded-2xl bg-white/60 dark:bg-transparent border border-slate-200/70 dark:border-transparent md:text-right">
-              <div className="text-2xl md:text-[28px] font-bold text-[#FC734D]">
+            <div className="p-4 rounded-2xl bg-white/85 dark:bg-transparent border border-[#09318D]/15 dark:border-transparent md:text-right">
+              <div className="text-2xl md:text-[28px] font-bold text-[#D95B9E] dark:text-[#FC734D]">
                 {siteConfig?.stat4Value || '2.4M'}
               </div>
-              <div className="text-xs md:text-[13px] text-slate-500 dark:text-slate-400">
+              <div className="text-xs md:text-[13px] text-[#09318D]/70 dark:text-slate-400">
                 {siteConfig?.stat4Label || 'запросов ежедневно'}
               </div>
             </div>
           </div>
 
-          {/* 3 Showcase Cards Row (как в Figma и на референсе) */}
+          {/* 3 Showcase Cards Row (как на фото и в Figma) */}
           <div className="mt-8 w-full grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
             {/* Card 1 */}
-            <div className="p-5 rounded-2xl bg-white/90 dark:bg-[#0E1A3B]/90 border border-[#0297DE]/35 backdrop-blur-md">
-              <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-4">
+            <div className="p-5 rounded-2xl bg-white/95 dark:bg-[#0E1A3B]/90 border border-[#09318D]/20 dark:border-[#0297DE]/35 backdrop-blur-md shadow-sm">
+              <div className="text-sm font-semibold text-[#09318D] dark:text-slate-200 mb-4">
                 Библиотека ИИ-моделей
               </div>
               <div className="grid grid-cols-3 gap-2.5 mb-4">
-                <div className="h-[90px] rounded-[10px] bg-[#1E3A8A]/70" />
-                <div className="h-[90px] rounded-[10px] bg-[#FC734D]/85" />
-                <div className="h-[90px] rounded-[10px] bg-[#0297DE]/85" />
+                <div className="h-[90px] rounded-[10px] bg-[#09318D]/85 dark:bg-[#1E3A8A]/70" />
+                <div className="h-[90px] rounded-[10px] bg-[#F59ACC] dark:bg-[#FC734D]/85" />
+                <div className="h-[90px] rounded-[10px] bg-[#3B66C4]/80 dark:bg-[#0297DE]/85" />
               </div>
-              <div className="w-2/3 h-3.5 rounded-full bg-[#FC734D]" />
+              <div className="w-2/3 h-3.5 rounded-full bg-[#F59ACC] dark:bg-[#FC734D]" />
             </div>
 
-            {/* Card 2 (График скорости с оранжево-розовым градиентом) */}
-            <div
-              className="p-5 rounded-2xl border border-white/25 text-white flex flex-col justify-between"
-              style={{
-                background: 'linear-gradient(135deg, rgba(252,115,77,0.92), rgba(244,63,94,0.88))',
-              }}
-            >
-              <div className="text-sm font-semibold">Скорость инференса • 120 tok/s</div>
+            {/* Card 2 (Центральная карточка: нежно-розовая в светлой теме как на фото, оранжево-розовая в тёмной) */}
+            <div className="p-5 rounded-2xl border border-[#09318D]/15 dark:border-white/25 text-white flex flex-col justify-between bg-gradient-to-br from-[#F59ACC] to-[#e479b6] dark:from-[#FC734D]/92 dark:to-[#F43F5E]/88 shadow-md">
+              <div className="text-sm font-semibold text-[#09318D] dark:text-white">
+                Скорость инференса • 120 tok/s
+              </div>
               <svg viewBox="0 0 318 110" fill="none" className="w-full h-28 mt-2">
                 <path
                   d="M5 85 C 60 85, 90 30, 155 45 C 220 60, 260 15, 313 25"
@@ -165,14 +162,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
 
             {/* Card 3 */}
-            <div className="p-5 rounded-2xl bg-white/90 dark:bg-[#0E1A3B]/90 border border-[#0297DE]/35 backdrop-blur-md flex flex-col justify-between">
-              <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-4">
+            <div className="p-5 rounded-2xl bg-white/95 dark:bg-[#0E1A3B]/90 border border-[#09318D]/20 dark:border-[#0297DE]/35 backdrop-blur-md flex flex-col justify-between shadow-sm">
+              <div className="text-sm font-semibold text-[#09318D] dark:text-slate-200 mb-4">
                 Пайплайн генерации API
               </div>
               <div className="space-y-3.5 my-auto">
-                <div className="w-full h-6 rounded-md bg-slate-200 dark:bg-[#1E293B]" />
-                <div className="w-4/5 h-4 rounded-md bg-[#FC734D]" />
-                <div className="w-3/5 h-4 rounded-md bg-[#0297DE]" />
+                <div className="w-full h-6 rounded-md bg-[#09318D]/10 dark:bg-[#1E293B]" />
+                <div className="w-4/5 h-4 rounded-md bg-[#F59ACC] dark:bg-[#FC734D]" />
+                <div className="w-3/5 h-4 rounded-md bg-[#09318D] dark:bg-[#0297DE]" />
               </div>
             </div>
           </div>
@@ -295,24 +292,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section id="pricing" className="relative py-24 px-5 md:px-20">
         <div className="relative z-10 max-w-7xl mx-auto">
           <div className="text-center max-w-2xl mx-auto mb-10">
-            <span className="text-xs font-bold tracking-wider uppercase text-[#FC734D]">
+            <span className="text-xs font-bold tracking-wider uppercase text-[#09318D] dark:text-[#FC734D]">
               ТАРИФЫ И ПОДПИСКИ
             </span>
-            <h2 className="mt-3 text-3xl md:text-[38px] font-bold text-slate-900 dark:text-white">
+            <h2 className="mt-3 text-3xl md:text-[38px] font-bold text-[#09318D] dark:text-white">
               Простые и прозрачные планы
             </h2>
-            <p className="mt-3 text-slate-600 dark:text-slate-400">
+            <p className="mt-3 text-[#09318D]/70 dark:text-slate-400">
               Начните бесплатно и масштабируйтесь по мере роста ваших задач.
             </p>
 
             {/* Billing Cycle Toggle */}
-            <div className="mt-7 inline-flex items-center p-1.5 rounded-xl bg-slate-200/80 dark:bg-[#0E1A3B] border border-slate-300 dark:border-white/10">
+            <div className="mt-7 inline-flex items-center p-1.5 rounded-xl bg-[#09318D]/5 dark:bg-[#0E1A3B] border border-[#09318D]/15 dark:border-white/10">
               <button
                 onClick={() => setBillingCycle('monthly')}
                 className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-all cursor-pointer ${
                   billingCycle === 'monthly'
-                    ? 'bg-[#0297DE] text-white shadow-sm'
-                    : 'text-slate-700 dark:text-slate-300'
+                    ? 'bg-[#09318D] dark:bg-[#0297DE] text-white shadow-sm'
+                    : 'text-[#09318D] dark:text-slate-300'
                 }`}
               >
                 Помесячно
@@ -321,12 +318,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 onClick={() => setBillingCycle('yearly')}
                 className={`px-4 py-2 rounded-lg text-[13px] font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer ${
                   billingCycle === 'yearly'
-                    ? 'bg-[#0297DE] text-white shadow-sm'
-                    : 'text-slate-700 dark:text-slate-300'
+                    ? 'bg-[#09318D] dark:bg-[#0297DE] text-white shadow-sm'
+                    : 'text-[#09318D] dark:text-slate-300'
                 }`}
               >
                 На год
-                <span className="text-[11px] font-bold text-[#FC734D]">-20%</span>
+                <span className="text-[11px] font-bold text-[#F59ACC] dark:text-[#FC734D]">-20%</span>
               </button>
             </div>
           </div>
@@ -339,45 +336,45 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   key={plan.slug}
                   className={`relative rounded-[20px] p-8 flex flex-col justify-between transition-all ${
                     plan.is_popular
-                      ? 'bg-white dark:bg-[#111F46]/95 border-2 border-[#FC734D] shadow-2xl shadow-[#FC734D]/10'
-                      : 'bg-white/90 dark:bg-[#0E1A3B]/90 border border-slate-200 dark:border-white/10'
+                      ? 'bg-white dark:bg-[#111F46]/95 border-2 border-[#F59ACC] dark:border-[#FC734D] shadow-2xl shadow-[#F59ACC]/20 dark:shadow-[#FC734D]/10'
+                      : 'bg-white/95 dark:bg-[#0E1A3B]/90 border border-[#09318D]/15 dark:border-white/10 shadow-sm'
                   }`}
                 >
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                      <h3 className="text-xl font-bold text-[#09318D] dark:text-white">
                         {plan.name}
                       </h3>
                       {plan.is_popular && (
-                        <span className="px-2.5 py-1 rounded-full bg-[#FC734D] text-white text-[10px] font-bold tracking-wide">
+                        <span className="px-2.5 py-1 rounded-full bg-[#F59ACC] text-[#09318D] dark:bg-[#FC734D] dark:text-white text-[10px] font-bold tracking-wide">
                           ХИТ ПРОДАЖ
                         </span>
                       )}
                     </div>
-                    <p className="text-[13px] text-slate-600 dark:text-slate-400 min-h-[38px]">
+                    <p className="text-[13px] text-[#09318D]/70 dark:text-slate-400 min-h-[38px]">
                       {plan.description}
                     </p>
 
                     <div className="mt-5 mb-6 flex items-baseline gap-2">
-                      <span className="text-[40px] font-bold text-slate-900 dark:text-white">
+                      <span className="text-[40px] font-bold text-[#09318D] dark:text-white">
                         {price.toLocaleString('ru-RU')} ₽
                       </span>
-                      <span className="text-sm text-slate-500 dark:text-slate-400">
+                      <span className="text-sm text-[#09318D]/60 dark:text-slate-400">
                         {price === 0 ? '/ навсегда' : '/ месяц'}
                       </span>
                     </div>
 
-                    <div className="h-px w-full bg-slate-200 dark:bg-white/10 mb-6" />
+                    <div className="h-px w-full bg-[#09318D]/10 dark:bg-white/10 mb-6" />
 
                     <ul className="space-y-3.5 mb-8">
                       {plan.features.map((feat, i) => (
                         <li key={i} className="flex items-start gap-2.5 text-[13px]">
                           <Check
                             className={`w-4 h-4 shrink-0 mt-0.5 ${
-                              plan.is_popular ? 'text-[#FC734D]' : 'text-[#0297DE]'
+                              plan.is_popular ? 'text-[#E068A8] dark:text-[#FC734D]' : 'text-[#09318D] dark:text-[#0297DE]'
                             }`}
                           />
-                          <span className="text-slate-700 dark:text-slate-200 font-medium">
+                          <span className="text-[#09318D]/85 dark:text-slate-200 font-medium">
                             {feat}
                           </span>
                         </li>
@@ -398,8 +395,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                           isDisabled
                             ? 'bg-slate-200 dark:bg-[#172754]/40 text-slate-400 cursor-not-allowed border border-slate-300 dark:border-white/5'
                             : plan.is_popular
-                            ? 'bg-[#FC734D] hover:bg-[#fb6338] text-white shadow-lg shadow-[#FC734D]/25 cursor-pointer'
-                            : 'bg-slate-900 dark:bg-[#172754] hover:bg-slate-800 dark:hover:bg-[#1e326a] text-white border border-transparent dark:border-white/15 cursor-pointer'
+                            ? 'bg-[#F59ACC] hover:bg-[#ee82bd] text-[#09318D] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] dark:text-white shadow-lg shadow-[#F59ACC]/30 dark:shadow-[#FC734D]/25 cursor-pointer'
+                            : 'bg-[#09318D] dark:bg-[#172754] hover:bg-[#07266e] dark:hover:bg-[#1e326a] text-white border border-transparent dark:border-white/15 cursor-pointer'
                         }`}
                       >
                         {isFreeCurrent
@@ -515,16 +512,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       {/* ================= CTA BANNER ================= */}
       <section className="relative py-20 px-5 md:px-20">
-        <div className="relative z-10 max-w-6xl mx-auto rounded-3xl bg-white/85 dark:bg-[#0E1A3B]/70 border border-[#FC734D]/40 p-10 md:p-14 text-center backdrop-blur-md">
-          <h2 className="text-2xl md:text-4xl font-bold text-slate-900 dark:text-white">
+        <div className="relative z-10 max-w-6xl mx-auto rounded-3xl bg-white/90 dark:bg-[#0E1A3B]/70 border border-[#F59ACC] dark:border-[#FC734D]/40 p-10 md:p-14 text-center backdrop-blur-md shadow-lg shadow-[#09318D]/5">
+          <h2 className="text-2xl md:text-4xl font-bold text-[#09318D] dark:text-white">
             Готовы ускорить свою работу в 3 раза?
           </h2>
-          <p className="mt-3 text-slate-600 dark:text-slate-300">
+          <p className="mt-3 text-[#09318D]/75 dark:text-slate-300">
             Присоединяйтесь к 120 000+ пользователей PATRIK AI уже сегодня.
           </p>
           <button
             onClick={() => onNavigate('auth')}
-            className="mt-7 inline-flex items-center gap-2.5 px-8 py-4 rounded-xl bg-[#FC734D] hover:bg-[#fb6338] text-white font-semibold transition-all cursor-pointer shadow-lg shadow-[#FC734D]/25"
+            className="mt-7 inline-flex items-center gap-2.5 px-8 py-4 rounded-xl bg-[#F59ACC] hover:bg-[#ee82bd] text-[#09318D] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] dark:text-white font-semibold transition-all cursor-pointer shadow-lg shadow-[#F59ACC]/30 dark:shadow-[#FC734D]/25"
           >
             Создать аккаунт бесплатно
             <ArrowRight className="w-4 h-4" />
@@ -533,7 +530,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ================= FOOTER ================= */}
-      <footer className="bg-slate-100 dark:bg-[#060D21] border-t border-slate-200 dark:border-white/10 pt-14 pb-24 md:pb-12 px-5 md:px-20">
+      <footer className="bg-white/95 dark:bg-[#060D21] border-t border-[#09318D]/15 dark:border-white/10 pt-14 pb-24 md:pb-12 px-5 md:px-20">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-10 pb-10">
           <div>
             <PatrikLogo size={28} />

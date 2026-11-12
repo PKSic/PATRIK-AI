@@ -295,12 +295,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   <div className="text-[13px] font-medium text-slate-500 dark:text-slate-400">
                     Использовано токенов в текущем месяце
                   </div>
-                  <div className="w-full h-3.5 rounded-full bg-slate-200 dark:bg-[#1E293B] overflow-hidden">
+                  <div className="w-full h-3.5 rounded-full bg-[#09318D]/10 dark:bg-[#1E293B] overflow-hidden">
                     <div
-                      className="h-full rounded-full transition-all duration-500"
+                      className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-[#09318D] to-[#F59ACC] dark:from-[#0297DE] dark:to-[#FC734D]"
                       style={{
                         width: `${usagePercent}%`,
-                        background: 'linear-gradient(90deg, #0297DE, #FC734D)',
                       }}
                     />
                   </div>
@@ -345,7 +344,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               {/* Right Column: Checkout / Upgrade Card */}
               <form
                 onSubmit={handlePay}
-                className="xl:col-span-5 rounded-2xl bg-white/95 dark:bg-[#111F46]/92 border-[1.5px] border-[#FC734D]/60 p-6 md:p-7 space-y-5 backdrop-blur-md"
+                className="xl:col-span-5 rounded-2xl bg-white/95 dark:bg-[#111F46]/92 border-[1.5px] border-[#F59ACC] dark:border-[#FC734D]/60 p-6 md:p-7 space-y-5 backdrop-blur-md"
               >
                 <div>
                   <h2 className="text-lg font-bold text-slate-900 dark:text-white">
@@ -501,7 +500,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 <button
                   type="submit"
                   disabled={paying || isBlockedPlan}
-                  className="w-full py-3.5 rounded-xl bg-[#FC734D] hover:bg-[#fb6338] disabled:bg-slate-400/30 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-semibold text-[15px] transition-all cursor-pointer shadow-lg shadow-[#FC734D]/20"
+                  className="w-full py-3.5 rounded-xl bg-[#F59ACC] hover:bg-[#ee82bd] text-[#09318D] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] dark:text-white disabled:bg-slate-400/30 disabled:text-slate-400 disabled:cursor-not-allowed font-semibold text-[15px] transition-all cursor-pointer shadow-lg shadow-[#F59ACC]/30 dark:shadow-[#FC734D]/20"
                 >
                   {isBlockedPlan
                     ? 'Тариф уже активен или ниже текущего'

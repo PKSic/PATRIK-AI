@@ -267,12 +267,12 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen bg-slate-50 dark:bg-[#0A1430] text-slate-900 dark:text-white transition-colors duration-300">
+    <div className="relative min-h-screen bg-white dark:bg-[#0A1430] text-[#09318D] dark:text-white transition-colors duration-300">
       {/* Живой анимированный фон на весь сайт */}
       <LightBeams />
 
       {/* ================= NAVBAR ================= */}
-      <header className="sticky top-0 z-40 h-16 md:h-20 px-5 md:px-20 flex items-center justify-between bg-white/75 dark:bg-[#0A1430]/75 backdrop-blur-lg border-b border-slate-200 dark:border-white/10">
+      <header className="sticky top-0 z-40 h-16 md:h-20 px-5 md:px-20 flex items-center justify-between bg-white/85 dark:bg-[#0A1430]/75 backdrop-blur-lg border-b border-[#09318D]/15 dark:border-white/10">
         <button
           onClick={() => {
             setPage('landing');
@@ -284,14 +284,14 @@ export const App: React.FC = () => {
         </button>
 
         {/* Desktop Nav Links */}
-        <nav className="hidden lg:flex items-center gap-8 text-sm font-medium text-slate-600 dark:text-slate-300">
-          <a href="#features" onClick={() => setPage('landing')} className="hover:text-[#0297DE] transition-colors">
+        <nav className="hidden lg:flex items-center gap-8 text-sm font-medium text-[#09318D]/80 dark:text-slate-300">
+          <a href="#features" onClick={() => setPage('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
             Возможности
           </a>
-          <a href="#models" onClick={() => setPage('landing')} className="hover:text-[#0297DE] transition-colors">
+          <a href="#models" onClick={() => setPage('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
             Модели
           </a>
-          <a href="#pricing" onClick={() => setPage('landing')} className="hover:text-[#0297DE] transition-colors">
+          <a href="#pricing" onClick={() => setPage('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
             Тарифы
           </a>
           <button
@@ -299,13 +299,13 @@ export const App: React.FC = () => {
               setPage('docs');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className={`hover:text-[#0297DE] transition-colors cursor-pointer ${
-              page === 'docs' ? 'text-[#FC734D] font-semibold' : ''
+            className={`hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors cursor-pointer ${
+              page === 'docs' ? 'text-[#09318D] underline decoration-[#F59ACC] decoration-2 underline-offset-4 dark:no-underline dark:text-[#FC734D] font-semibold' : ''
             }`}
           >
             Документация
           </button>
-          <a href="#faq" onClick={() => setPage('landing')} className="hover:text-[#0297DE] transition-colors">
+          <a href="#faq" onClick={() => setPage('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
             FAQ
           </a>
         </nav>
@@ -315,10 +315,10 @@ export const App: React.FC = () => {
           <button
             onClick={cycleTheme}
             title="Переключить тему (Тёмная / Светлая / Авто)"
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-200/80 dark:bg-[#132044] border border-slate-300 dark:border-white/10 text-xs font-medium text-slate-700 dark:text-slate-200 cursor-pointer hover:border-[#0297DE]/50 transition-all"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#09318D]/5 dark:bg-[#132044] border border-[#09318D]/20 dark:border-white/10 text-xs font-medium text-[#09318D] dark:text-slate-200 cursor-pointer hover:border-[#F59ACC] dark:hover:border-[#0297DE]/50 transition-all"
           >
             {theme === 'dark' && <Moon className="w-3.5 h-3.5 text-[#0297DE]" />}
-            {theme === 'light' && <Sun className="w-3.5 h-3.5 text-[#FC734D]" />}
+            {theme === 'light' && <Sun className="w-3.5 h-3.5 text-[#09318D]" />}
             {theme === 'system' && <Monitor className="w-3.5 h-3.5 text-emerald-500" />}
             <span className="hidden sm:inline">
               {theme === 'dark' ? 'Тёмная' : theme === 'light' ? 'Светлая' : 'Авто'}
@@ -328,14 +328,14 @@ export const App: React.FC = () => {
           {!user ? (
             <button
               onClick={() => setPage('auth')}
-              className="px-4 md:px-5 py-2 md:py-2.5 rounded-[10px] bg-[#FC734D] hover:bg-[#fb6338] text-white text-xs md:text-sm font-semibold transition-all cursor-pointer"
+              className="px-4 md:px-5 py-2 md:py-2.5 rounded-[10px] bg-[#09318D] hover:bg-[#07266e] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] text-white text-xs md:text-sm font-semibold transition-all cursor-pointer"
             >
               Войти
             </button>
           ) : (
             <button
               onClick={() => setPage(page === 'dashboard' ? 'landing' : 'dashboard')}
-              className="px-4 md:px-5 py-2 md:py-2.5 rounded-[10px] bg-[#FC734D] hover:bg-[#fb6338] text-white text-xs md:text-sm font-semibold transition-all cursor-pointer"
+              className="px-4 md:px-5 py-2 md:py-2.5 rounded-[10px] bg-[#09318D] hover:bg-[#07266e] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] text-white text-xs md:text-sm font-semibold transition-all cursor-pointer"
             >
               {page === 'dashboard' ? 'На главную' : 'Кабинет'}
             </button>
@@ -379,17 +379,17 @@ export const App: React.FC = () => {
       {/* ================= AUTH REQUIRED MODAL (пункт 8) ================= */}
       {authPromptOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#0E1A3B] border border-[#0297DE]/40 p-7 shadow-2xl text-center space-y-5 relative">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#0E1A3B] border border-[#09318D]/25 dark:border-[#0297DE]/40 p-7 shadow-2xl text-center space-y-5 relative">
             <button
               onClick={() => setAuthPromptOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
+              className="absolute top-4 right-4 text-slate-400 hover:text-[#09318D] dark:hover:text-white cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
-            <div className="w-12 h-12 rounded-2xl bg-[#FC734D]/15 text-[#FC734D] flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 rounded-2xl bg-[#F59ACC]/25 dark:bg-[#FC734D]/15 text-[#09318D] dark:text-[#FC734D] flex items-center justify-center mx-auto">
               <Lock className="w-6 h-6" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+            <h3 className="text-xl font-bold text-[#09318D] dark:text-white">
               Требуется авторизация
             </h3>
             <p className="text-sm text-slate-600 dark:text-slate-300">
@@ -399,7 +399,7 @@ export const App: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-3 pt-1">
               <button
                 onClick={() => setAuthPromptOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-200 dark:bg-white/10 text-slate-800 dark:text-slate-200 text-sm font-medium cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-white/10 text-[#09318D] dark:text-slate-200 text-sm font-medium cursor-pointer"
               >
                 Отмена
               </button>
@@ -408,7 +408,7 @@ export const App: React.FC = () => {
                   setAuthPromptOpen(false);
                   setPage('auth');
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-[#FC734D] hover:bg-[#fb6338] text-white text-sm font-semibold cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-[#F59ACC] hover:bg-[#ee82bd] text-[#09318D] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] dark:text-white text-sm font-semibold cursor-pointer"
               >
                 Войти / Регистрация
               </button>

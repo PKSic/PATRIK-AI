@@ -51,7 +51,7 @@ export const PatrikLogo: React.FC<PatrikLogoProps> = ({ size = 36, withText = tr
         </svg>
       </div>
       {withText && (
-        <span className="text-[20px] font-bold tracking-tight text-slate-900 dark:text-white">
+        <span className="text-[20px] font-bold tracking-tight text-[#09318D] dark:text-white">
           PATRIK AI
         </span>
       )}

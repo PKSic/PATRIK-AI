@@ -56,8 +56,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthSubmit }) => {
             }}
             className={`py-2.5 rounded-[9px] text-sm font-semibold transition-all cursor-pointer ${
               mode === 'login'
-                ? 'bg-[#0297DE] text-white'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                ? 'bg-[#09318D] dark:bg-[#0297DE] text-white'
+                : 'text-[#09318D]/70 dark:text-slate-400 hover:text-[#09318D] dark:hover:text-white'
             }`}
           >
             Вход
@@ -70,8 +70,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthSubmit }) => {
             }}
             className={`py-2.5 rounded-[9px] text-sm font-semibold transition-all cursor-pointer ${
               mode === 'register'
-                ? 'bg-[#0297DE] text-white'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                ? 'bg-[#09318D] dark:bg-[#0297DE] text-white'
+                : 'text-[#09318D]/70 dark:text-slate-400 hover:text-[#09318D] dark:hover:text-white'
             }`}
           >
             Регистрация
@@ -136,7 +136,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthSubmit }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-[50px] rounded-xl bg-[#FC734D] hover:bg-[#fb6338] disabled:opacity-60 text-white font-semibold text-[15px] transition-all cursor-pointer shadow-lg shadow-[#FC734D]/25"
+            className="w-full h-[50px] rounded-xl bg-[#F59ACC] hover:bg-[#ee82bd] text-[#09318D] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] dark:text-white disabled:opacity-60 font-semibold text-[15px] transition-all cursor-pointer shadow-lg shadow-[#F59ACC]/30 dark:shadow-[#FC734D]/25"
           >
             {loading
               ? 'Подождите...'
