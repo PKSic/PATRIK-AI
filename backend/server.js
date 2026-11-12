@@ -232,6 +232,13 @@ let siteConfig = {
 const usersByEmail = new Map();
 const sessions = new Map(); // token -> { email, expiresAt }
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const ADMIN_EMAILS = new Set([
+  'admin@patrik.ai',
+  ...(process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+]);
 
 function seedDefaultUsers() {
   const adminPass = process.env.ADMIN_PASSWORD;
@@ -297,7 +304,10 @@ function loadStore() {
       PLANS.splice(0, PLANS.length, ...data.plans);
     }
     if (Array.isArray(data.users)) {
-      for (const [email, u] of data.users) usersByEmail.set(email, u);
+      for (const [email, u] of data.users) {
+        if (ADMIN_EMAILS.has(email)) u.role = 'admin';
+        usersByEmail.set(email, u);
+      }
     }
     if (Array.isArray(data.sessions)) {
       const now = Date.now();
@@ -378,6 +388,9 @@ app.post('/api/auth/login', rateLimit(15, 5 * 60 * 1000), (req, res) => {
   if (!user.passwordHash.includes(':')) {
     user.passwordHash = hashPassword(password);
   }
+  if (ADMIN_EMAILS.has(normalized)) {
+    user.role = 'admin';
+  }
 
   const token = crypto.randomBytes(32).toString('hex');
   sessions.set(token, { email: normalized, expiresAt: Date.now() + SESSION_TTL_MS });
@@ -412,7 +425,7 @@ app.post('/api/auth/register', rateLimit(10, 5 * 60 * 1000), async (req, res) =>
     email: normalized,
     passwordHash: hashPassword(password),
     full_name: safeName,
-    role: 'user',
+    role: ADMIN_EMAILS.has(normalized) ? 'admin' : 'user',
     subscription: null,
     transactions: [],
     apiKeys: [],
