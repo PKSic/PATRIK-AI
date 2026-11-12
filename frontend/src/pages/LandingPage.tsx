@@ -78,7 +78,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   return (
     <div className="relative w-full overflow-hidden">
       {/* ================= HERO SECTION ================= */}
-      <section className="relative pt-14 pb-24 md:pt-20 md:pb-32 px-5 md:px-20">
+      <section className="relative pt-14 pb-24 md:pt-20 md:pb-32 px-4 sm:px-6 md:px-12 lg:px-20">
         <div className="relative z-10 max-w-6xl mx-auto flex flex-col items-center text-center">
           {/* Pill Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#09318D]/10 dark:bg-[#0297DE]/15 border border-[#09318D]/25 dark:border-[#0297DE]/40 mb-7">
@@ -166,38 +166,38 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
 
               {/* 3 мини-карточки моделей с иконками и характеристиками */}
-              <div className="grid grid-cols-3 gap-2 mb-3">
-                <div className="p-2 rounded-xl bg-[#09318D]/10 dark:bg-[#1E3A8A]/50 border border-[#09318D]/15 dark:border-white/10 flex flex-col justify-between h-[84px] text-left">
-                  <MessageSquare className="w-4 h-4 text-[#09318D] dark:text-[#38BDF8]" />
-                  <div>
-                    <div className="text-[11px] font-bold text-[#09318D] dark:text-white leading-tight">
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-3">
+                <div className="p-1.5 sm:p-2 rounded-xl bg-[#09318D]/10 dark:bg-[#1E3A8A]/50 border border-[#09318D]/15 dark:border-white/10 flex flex-col justify-between h-[84px] text-left min-w-0">
+                  <MessageSquare className="w-4 h-4 text-[#09318D] dark:text-[#38BDF8] shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-[10px] sm:text-[11px] font-bold text-[#09318D] dark:text-white leading-tight truncate">
                       Text 2.5
                     </div>
-                    <div className="text-[9px] text-[#09318D]/70 dark:text-slate-400">
+                    <div className="text-[8px] sm:text-[9px] text-[#09318D]/70 dark:text-slate-400 truncate">
                       128K ctx
                     </div>
                   </div>
                 </div>
 
-                <div className="p-2 rounded-xl bg-[#F59ACC]/20 dark:bg-[#FC734D]/20 border border-[#F59ACC]/50 dark:border-[#FC734D]/40 flex flex-col justify-between h-[84px] text-left">
-                  <Code2 className="w-4 h-4 text-[#D95B9E] dark:text-[#FC734D]" />
-                  <div>
-                    <div className="text-[11px] font-bold text-[#09318D] dark:text-white leading-tight">
+                <div className="p-1.5 sm:p-2 rounded-xl bg-[#F59ACC]/20 dark:bg-[#FC734D]/20 border border-[#F59ACC]/50 dark:border-[#FC734D]/40 flex flex-col justify-between h-[84px] text-left min-w-0">
+                  <Code2 className="w-4 h-4 text-[#D95B9E] dark:text-[#FC734D] shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-[10px] sm:text-[11px] font-bold text-[#09318D] dark:text-white leading-tight truncate">
                       Code Pro
                     </div>
-                    <div className="text-[9px] text-[#09318D]/70 dark:text-slate-400">
+                    <div className="text-[8px] sm:text-[9px] text-[#09318D]/70 dark:text-slate-400 truncate">
                       TS / Py / Rust
                     </div>
                   </div>
                 </div>
 
-                <div className="p-2 rounded-xl bg-sky-500/15 dark:bg-[#0297DE]/25 border border-sky-500/30 dark:border-[#0297DE]/40 flex flex-col justify-between h-[84px] text-left">
-                  <ImageIcon className="w-4 h-4 text-[#0297DE]" />
-                  <div>
-                    <div className="text-[11px] font-bold text-[#09318D] dark:text-white leading-tight">
+                <div className="p-1.5 sm:p-2 rounded-xl bg-sky-500/15 dark:bg-[#0297DE]/25 border border-sky-500/30 dark:border-[#0297DE]/40 flex flex-col justify-between h-[84px] text-left min-w-0">
+                  <ImageIcon className="w-4 h-4 text-[#0297DE] shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-[10px] sm:text-[11px] font-bold text-[#09318D] dark:text-white leading-tight truncate">
                       Vision 4K
                     </div>
-                    <div className="text-[9px] text-[#09318D]/70 dark:text-slate-400">
+                    <div className="text-[8px] sm:text-[9px] text-[#09318D]/70 dark:text-slate-400 truncate">
                       UI & Render
                     </div>
                   </div>
@@ -265,7 +265,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ================= FEATURES SECTION ================= */}
-      <section id="features" className="py-20 px-5 md:px-20 max-w-7xl mx-auto">
+      <section id="features" className="py-20 px-4 sm:px-6 md:px-12 lg:px-20 max-w-7xl mx-auto">
         <div className="text-center max-w-2xl mx-auto mb-12">
           <span className="text-xs font-bold tracking-wider uppercase text-[#0297DE]">
             ПРЕИМУЩЕСТВА
@@ -320,7 +320,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ================= AI MODELS SECTION ================= */}
-      <section id="models" className="py-16 px-5 md:px-20 max-w-7xl mx-auto">
+      <section id="models" className="py-16 px-4 sm:px-6 md:px-12 lg:px-20 max-w-7xl mx-auto">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <span className="text-xs font-bold tracking-wider uppercase text-[#FC734D]">
             ДОСТУПНЫЕ МОДЕЛИ
@@ -377,7 +377,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ================= PRICING SECTION ================= */}
-      <section id="pricing" className="relative py-24 px-5 md:px-20">
+      <section id="pricing" className="relative py-20 px-4 sm:px-6 md:px-12 lg:px-20">
         <div className="relative z-10 max-w-7xl mx-auto">
           <div className="text-center max-w-2xl mx-auto mb-10">
             <span className="text-xs font-bold tracking-wider uppercase text-[#09318D] dark:text-[#FC734D]">
@@ -511,7 +511,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ================= REVIEWS SECTION ================= */}
-      <section id="reviews" className="py-20 px-5 md:px-20 max-w-7xl mx-auto">
+      <section id="reviews" className="py-20 px-4 sm:px-6 md:px-12 lg:px-20 max-w-7xl mx-auto">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <span className="text-xs font-bold tracking-wider uppercase text-[#0297DE]">ОТЗЫВЫ</span>
           <h2 className="mt-2.5 text-3xl md:text-[34px] font-bold text-slate-900 dark:text-white">
@@ -562,7 +562,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ================= FAQ SECTION ================= */}
-      <section id="faq" className="py-16 px-5 md:px-20 max-w-4xl mx-auto">
+      <section id="faq" className="py-16 px-4 sm:px-6 md:px-12 lg:px-20 max-w-4xl mx-auto">
         <h2 className="text-3xl md:text-[34px] font-bold text-center text-slate-900 dark:text-white mb-9">
           Частые вопросы
         </h2>
@@ -600,8 +600,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       {/* ================= CTA BANNER (скрывается, если пользователь уже авторизован) ================= */}
       {!user && (
-        <section className="relative py-20 px-5 md:px-20">
-          <div className="relative z-10 max-w-6xl mx-auto rounded-3xl bg-white/90 dark:bg-[#0E1A3B]/70 border border-[#F59ACC] dark:border-[#FC734D]/40 p-10 md:p-14 text-center backdrop-blur-md shadow-lg shadow-[#09318D]/5">
+        <section className="relative py-20 px-4 sm:px-6 md:px-12 lg:px-20">
+          <div className="relative z-10 max-w-6xl mx-auto rounded-3xl bg-white/90 dark:bg-[#0E1A3B]/70 border border-[#F59ACC] dark:border-[#FC734D]/40 p-8 sm:p-10 md:p-14 text-center backdrop-blur-md shadow-lg shadow-[#09318D]/5">
             <h2 className="text-2xl md:text-4xl font-bold text-[#09318D] dark:text-white">
               Готовы ускорить свою работу в 3 раза?
             </h2>
@@ -620,7 +620,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       )}
 
       {/* ================= FOOTER ================= */}
-      <footer className="bg-white/95 dark:bg-[#060D21] border-t border-[#09318D]/15 dark:border-white/10 pt-14 pb-24 md:pb-12 px-5 md:px-20">
+      <footer className="bg-white/95 dark:bg-[#060D21] border-t border-[#09318D]/15 dark:border-white/10 pt-14 pb-28 md:pb-12 px-4 sm:px-6 md:px-12 lg:px-20">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-10 pb-10">
           <div>
             <PatrikLogo size={28} />

@@ -59,37 +59,39 @@ Invoke-RestMethod -Uri "https://api.patrik.ai/v1/chat/completions" \`
 PATRIK_BASE_URL="https://api.patrik.ai/v1"`;
 
   return (
-    <div className="relative z-10 max-w-7xl mx-auto px-5 md:px-12 pt-10 pb-28">
-      <div className="flex flex-col lg:flex-row gap-8">
+    <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 md:px-12 pt-6 sm:pt-10 pb-28 w-full max-w-full overflow-x-hidden">
+      <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 min-w-0 max-w-full">
         {/* Sidebar */}
-        <aside className="w-full lg:w-64 shrink-0">
-          <div className="sticky top-24 rounded-2xl bg-white/85 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 p-5 backdrop-blur-md space-y-2">
-            <div className="text-xs font-bold uppercase tracking-wider text-[#FC734D] mb-3">
+        <aside className="w-full lg:w-64 shrink-0 min-w-0 max-w-full">
+          <div className="lg:sticky lg:top-24 rounded-2xl bg-white/85 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 p-3.5 sm:p-5 backdrop-blur-md">
+            <div className="text-xs font-bold uppercase tracking-wider text-[#FC734D] mb-2 sm:mb-3">
               Документация API
             </div>
-            {[
-              { href: '#quickstart', label: 'Быстрый старт', icon: <BookOpen className="w-4 h-4" /> },
-              { href: '#auth', label: 'Авторизация и .env', icon: <Key className="w-4 h-4" /> },
-              { href: '#models', label: 'Модели PATRIK AI', icon: <Cpu className="w-4 h-4" /> },
-              { href: '#examples', label: 'Примеры запросов', icon: <Terminal className="w-4 h-4" /> },
-              { href: '#errors', label: 'Коды ошибок', icon: <AlertCircle className="w-4 h-4" /> },
-            ].map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-[#0297DE]/15 hover:text-[#0297DE] transition-colors"
-              >
-                {item.icon}
-                {item.label}
-              </a>
-            ))}
+            <div className="flex lg:flex-col gap-1.5 overflow-x-auto no-scrollbar pb-1 lg:pb-0">
+              {[
+                { href: '#quickstart', label: 'Быстрый старт', icon: <BookOpen className="w-4 h-4 shrink-0" /> },
+                { href: '#auth', label: 'Авторизация и .env', icon: <Key className="w-4 h-4 shrink-0" /> },
+                { href: '#models', label: 'Модели PATRIK AI', icon: <Cpu className="w-4 h-4 shrink-0" /> },
+                { href: '#examples', label: 'Примеры запросов', icon: <Terminal className="w-4 h-4 shrink-0" /> },
+                { href: '#errors', label: 'Коды ошибок', icon: <AlertCircle className="w-4 h-4 shrink-0" /> },
+              ].map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm font-medium whitespace-nowrap text-slate-700 dark:text-slate-300 hover:bg-[#0297DE]/15 hover:text-[#0297DE] transition-colors shrink-0"
+                >
+                  {item.icon}
+                  {item.label}
+                </a>
+              ))}
+            </div>
           </div>
         </aside>
 
         {/* Main Docs Content */}
-        <main className="flex-1 space-y-8">
+        <main className="flex-1 space-y-6 sm:space-y-8 min-w-0 max-w-full">
           {/* Header */}
-          <div className="rounded-2xl bg-white/85 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 p-7 backdrop-blur-md">
+          <div className="rounded-2xl bg-white/85 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 p-5 sm:p-7 backdrop-blur-md">
             <span className="inline-block px-3 py-1 rounded-full bg-[#0297DE]/15 text-[#0297DE] text-xs font-semibold mb-3">
               REST API v1 • OpenAI-совместимый формат
             </span>

@@ -476,11 +476,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   };
 
   return (
-    <div className="relative z-10 min-h-[calc(100vh-80px)] pb-28 md:pb-12">
-      <div className="max-w-7xl mx-auto px-5 md:px-10 pt-8 flex flex-col lg:flex-row gap-8">
+    <div className="relative z-10 min-h-[calc(100vh-80px)] pb-28 md:pb-12 w-full max-w-full overflow-x-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-8 flex flex-col lg:flex-row gap-6 md:gap-8 min-w-0 max-w-full">
         {/* Sidebar */}
-        <aside className="w-full lg:w-[250px] shrink-0 rounded-2xl bg-white/85 dark:bg-[#070E24]/90 border border-slate-200 dark:border-white/10 p-4 h-fit backdrop-blur-md">
-          <div className="flex lg:flex-col gap-1.5 overflow-x-auto">
+        <aside className="w-full lg:w-[250px] shrink-0 rounded-2xl bg-white/85 dark:bg-[#070E24]/90 border border-slate-200 dark:border-white/10 p-3 sm:p-4 h-fit backdrop-blur-md min-w-0 max-w-full">
+          <div className="flex lg:flex-col gap-1.5 overflow-x-auto no-scrollbar pb-1 lg:pb-0">
             {[
               { id: 'overview', label: 'Обзор подписки', icon: <LayoutDashboard className="w-4 h-4" /> },
               { id: 'keys', label: 'API Ключи', icon: <Key className="w-4 h-4" /> },
@@ -587,14 +587,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                       {transactions.slice(0, 5).map((tx) => (
                         <div
                           key={tx.tx_code}
-                          className="flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-slate-100 dark:bg-[#132044]/75 text-[13px]"
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-[#132044]/75 text-[13px]"
                         >
-                          <span className="font-medium text-[#0297DE]">{tx.tx_code}</span>
-                          <span className="text-slate-700 dark:text-slate-200">{tx.plan_name}</span>
-                          <span className="font-semibold text-slate-900 dark:text-white">
-                            {tx.amount.toLocaleString('ru-RU')} ₽
-                          </span>
-                          <span className="text-xs font-medium text-emerald-500">{tx.status}</span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-semibold text-[#0297DE] shrink-0">{tx.tx_code}</span>
+                            <span className="text-slate-700 dark:text-slate-200 truncate">{tx.plan_name}</span>
+                          </div>
+                          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                            <span className="font-semibold text-slate-900 dark:text-white">
+                              {tx.amount.toLocaleString('ru-RU')} ₽
+                            </span>
+                            <span className="text-xs font-medium text-emerald-500">{tx.status}</span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -917,7 +921,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           )}
 
           {activeTab === 'history' && (
-            <div className="rounded-2xl bg-white/90 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 p-6 space-y-4">
+            <div className="rounded-2xl bg-white/90 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 p-5 sm:p-6 space-y-4">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">История всех транзакций</h2>
               {transactions.length === 0 ? (
                 <p className="text-sm text-slate-500">Транзакций пока нет.</p>
@@ -926,13 +930,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   {transactions.map((tx) => (
                     <div
                       key={tx.tx_code}
-                      className="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-100 dark:bg-[#132044]/70 text-sm"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 px-4 py-3 rounded-xl bg-slate-100 dark:bg-[#132044]/70 text-sm"
                     >
-                      <span className="font-semibold text-[#0297DE]">{tx.tx_code}</span>
-                      <span className="text-slate-700 dark:text-slate-200">{tx.plan_name}</span>
-                      <span className="uppercase text-xs text-slate-500">{tx.payment_method}</span>
-                      <span className="font-bold text-slate-900 dark:text-white">{tx.amount} ₽</span>
-                      <span className="text-emerald-500 font-medium">{tx.status}</span>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="font-semibold text-[#0297DE] shrink-0">{tx.tx_code}</span>
+                        <span className="text-slate-700 dark:text-slate-200 truncate">{tx.plan_name}</span>
+                      </div>
+                      <div className="flex items-center justify-between sm:justify-end gap-3 text-xs shrink-0">
+                        <span className="uppercase text-slate-500 px-2 py-0.5 rounded bg-slate-200/60 dark:bg-white/5">{tx.payment_method}</span>
+                        <span className="font-bold text-slate-900 dark:text-white text-sm">{tx.amount.toLocaleString('ru-RU')} ₽</span>
+                        <span className="text-emerald-500 font-medium">{tx.status}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1113,11 +1121,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
           {/* ================= TAB: SUPPORT (ПОДДЕРЖКА) ================= */}
           {activeTab === 'support' && (
-            <div className="rounded-2xl bg-white/90 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 p-6 md:p-7 space-y-5 backdrop-blur-md min-h-[560px] flex flex-col justify-between">
+            <div className="rounded-2xl bg-white/90 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 p-4 sm:p-6 md:p-7 space-y-4 sm:space-y-5 backdrop-blur-md min-h-[500px] sm:min-h-[560px] flex flex-col justify-between">
               {/* Header */}
-              <div className="pb-4 border-b border-slate-200 dark:border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="pb-3 sm:pb-4 border-b border-slate-200 dark:border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+                  <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
                     <MessageSquare className="w-5 h-5 text-[#0297DE]" />
                     Служба заботы PATRIK AI
                   </h2>
@@ -1125,7 +1133,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     Задайте любой вопрос или опишите сложность — мы ответим вам в этом чате.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-start sm:self-auto">
                   <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                     Поддержка онлайн
@@ -1141,18 +1149,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               </div>
 
               {/* Быстрые темы для мгновенного авто-ответа */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-[#0297DE]/8 via-white to-[#FC734D]/8 dark:from-[#0297DE]/15 dark:via-[#0E1A3B] dark:to-[#FC734D]/15 border border-[#0297DE]/20 dark:border-white/10 space-y-2.5 shadow-sm">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-[#0297DE]/8 via-white to-[#FC734D]/8 dark:from-[#0297DE]/15 dark:via-[#0E1A3B] dark:to-[#FC734D]/15 border border-[#0297DE]/20 dark:border-white/10 space-y-2 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-[#FC734D]" />
                   <span>Быстрые темы с мгновенным авто-ответом:</span>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   {SUPPORT_TOPICS.map((topic) => (
                     <button
                       key={topic.id}
                       type="button"
                       onClick={() => handleSelectTopic(topic)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#132044] hover:bg-[#0297DE]/10 dark:hover:bg-[#0297DE]/20 border border-slate-200 dark:border-white/10 hover:border-[#0297DE]/40 text-xs font-medium text-slate-800 dark:text-slate-200 hover:text-[#0297DE] transition-all cursor-pointer shadow-sm"
+                      className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white dark:bg-[#132044] hover:bg-[#0297DE]/10 dark:hover:bg-[#0297DE]/20 border border-slate-200 dark:border-white/10 hover:border-[#0297DE]/40 text-xs font-medium text-slate-800 dark:text-slate-200 hover:text-[#0297DE] transition-all cursor-pointer shadow-sm"
                     >
                       <span>{topic.icon}</span>
                       <span>{topic.title}</span>
@@ -1216,7 +1224,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                           </span>
                         </div>
                         <div
-                          className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed shadow-sm whitespace-pre-line ${
+                          className={`max-w-[92%] sm:max-w-[85%] rounded-2xl px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm leading-relaxed shadow-sm whitespace-pre-line ${
                             isUser
                               ? 'bg-[#0297DE] text-white rounded-br-none'
                               : 'bg-slate-100 dark:bg-[#132044] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 rounded-bl-none'
@@ -1237,15 +1245,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   value={supportText}
                   onChange={(e) => setSupportText(e.target.value)}
                   placeholder="Опишите ваш вопрос или пожелание..."
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-[#070E24] border border-slate-300 dark:border-white/15 text-sm text-slate-900 dark:text-white outline-none placeholder:text-slate-400 focus:border-[#0297DE]"
+                  className="flex-1 min-w-0 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-slate-100 dark:bg-[#070E24] border border-slate-300 dark:border-white/15 text-xs sm:text-sm text-slate-900 dark:text-white outline-none placeholder:text-slate-400 focus:border-[#0297DE]"
                 />
                 <button
                   type="submit"
                   disabled={sendingSupport || !supportText.trim()}
-                  className="px-5 py-2.5 rounded-xl bg-[#FC734D] hover:bg-[#fb6338] disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold inline-flex items-center gap-2 cursor-pointer transition-all shadow-md shadow-[#FC734D]/20"
+                  className="px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-[#FC734D] hover:bg-[#fb6338] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold inline-flex items-center gap-2 cursor-pointer transition-all shadow-md shadow-[#FC734D]/20 shrink-0"
                 >
                   <Send className="w-4 h-4" />
-                  <span>{sendingSupport ? 'Отправка...' : 'Отправить'}</span>
+                  <span className="hidden sm:inline">{sendingSupport ? 'Отправка...' : 'Отправить'}</span>
                 </button>
               </form>
             </div>
@@ -1265,9 +1273,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
       {/* ================= MODAL: ОПЛАТА ПО СБП ================= */}
       {showSbpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm">
           <div
-            className="w-full max-w-md rounded-3xl bg-[#0A1430] p-7 shadow-2xl text-white space-y-5 relative"
+            className="w-full max-w-md rounded-3xl bg-[#0A1430] p-5 sm:p-7 shadow-2xl text-white space-y-4 sm:space-y-5 relative max-h-[92vh] overflow-y-auto"
             style={{
               border: '1.5px solid rgba(2, 151, 222, 0.45)',
               boxShadow: '0 0 50px rgba(2, 151, 222, 0.2), 0 0 80px rgba(252, 115, 77, 0.15)',
@@ -1276,12 +1284,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             <button
               disabled={checkingSbp}
               onClick={() => setShowSbpModal(false)}
-              className="absolute top-5 right-5 text-slate-400 hover:text-white disabled:opacity-40 cursor-pointer"
+              className="absolute top-4 sm:top-5 right-4 sm:right-5 text-slate-400 hover:text-white disabled:opacity-40 cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between pr-8 sm:pr-0">
               <PatrikLogo size={28} />
               <span className="px-2.5 py-1 rounded-full bg-[#0297DE]/20 border border-[#0297DE]/40 text-[11px] font-semibold text-[#7DD3FC]">
                 СБП • 0% комиссия
@@ -1289,7 +1297,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             </div>
 
             <div className="text-center space-y-1">
-              <h3 className="text-xl font-bold">Оплата подписки «{currentPlanObj?.name}»</h3>
+              <h3 className="text-lg sm:text-xl font-bold">Оплата подписки «{currentPlanObj?.name}»</h3>
               <p className="text-sm text-slate-400">
                 Сумма к оплате:{' '}
                 <span className="text-[#FC734D] font-bold text-base">
@@ -1303,11 +1311,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               className="mx-auto w-fit p-[2px] rounded-2xl"
               style={{ background: 'linear-gradient(135deg, #0297DE, #FC734D)' }}
             >
-              <div className="bg-white rounded-[14px] p-3.5">
+              <div className="bg-white rounded-[14px] p-2.5 sm:p-3.5">
                 <img
                   src="/qr-sbp.png"
                   alt="QR СБП"
-                  className="w-52 h-52 object-contain"
+                  className="w-44 h-44 sm:w-52 sm:h-52 object-contain"
                 />
               </div>
             </div>
@@ -1332,8 +1340,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
       {/* ================= MODAL: НОВЫЙ API-КЛЮЧ ================= */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#0E1A3B] border border-slate-200 dark:border-white/15 p-6 shadow-2xl space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#0E1A3B] border border-slate-200 dark:border-white/15 p-5 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 max-h-[92vh] overflow-y-auto">
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white">Новый API-ключ</h3>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Moon, Sun, Monitor, Home, LayoutGrid, CreditCard, User, BookOpen, Lock, X } from 'lucide-react';
+import { Moon, Sun, Monitor, Home, LayoutGrid, CreditCard, User, BookOpen, Lock, X, Menu, HelpCircle, Sparkles } from 'lucide-react';
 import { PatrikLogo } from './components/PatrikLogo';
 import { LightBeams } from './components/LightBeams';
 import { LandingPage } from './pages/LandingPage';
@@ -65,6 +65,21 @@ export const App: React.FC = () => {
 
   // Плашка "Пожалуйста, войдите или зарегистрируйте аккаунт"
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const scrollToSection = (id: string) => {
+    setMobileMenuOpen(false);
+    if (page !== 'landing') {
+      navigateTo('landing');
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } else {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   // Тема Dark / Light / System
   useEffect(() => {
@@ -361,25 +376,37 @@ export const App: React.FC = () => {
       <LightBeams />
 
       {/* ================= NAVBAR ================= */}
-      <header className="sticky top-0 z-40 h-16 md:h-20 px-5 md:px-20 flex items-center justify-between bg-white/85 dark:bg-[#0A1430]/75 backdrop-blur-lg border-b border-[#09318D]/15 dark:border-white/10">
+      <header className="sticky top-0 z-40 h-16 md:h-20 px-4 sm:px-6 md:px-12 lg:px-20 flex items-center justify-between bg-white/85 dark:bg-[#0A1430]/75 backdrop-blur-lg border-b border-[#09318D]/15 dark:border-white/10">
         <button
-          onClick={() => navigateTo('landing')}
+          onClick={() => {
+            setMobileMenuOpen(false);
+            navigateTo('landing');
+          }}
           className="cursor-pointer"
         >
-          <PatrikLogo size={34} />
+          <PatrikLogo size={32} />
         </button>
 
         {/* Desktop Nav Links */}
         <nav className="hidden lg:flex items-center gap-8 text-sm font-medium text-[#09318D]/80 dark:text-slate-300">
-          <a href="#features" onClick={() => navigateTo('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
+          <button
+            onClick={() => scrollToSection('features')}
+            className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors cursor-pointer"
+          >
             Возможности
-          </a>
-          <a href="#models" onClick={() => navigateTo('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
+          </button>
+          <button
+            onClick={() => scrollToSection('models')}
+            className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors cursor-pointer"
+          >
             Модели
-          </a>
-          <a href="#pricing" onClick={() => navigateTo('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
+          </button>
+          <button
+            onClick={() => scrollToSection('pricing')}
+            className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors cursor-pointer"
+          >
             Тарифы
-          </a>
+          </button>
           <button
             onClick={() => navigateTo('docs')}
             className={`hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors cursor-pointer ${
@@ -388,17 +415,20 @@ export const App: React.FC = () => {
           >
             Документация
           </button>
-          <a href="#faq" onClick={() => navigateTo('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
+          <button
+            onClick={() => scrollToSection('faq')}
+            className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors cursor-pointer"
+          >
             FAQ
-          </a>
+          </button>
         </nav>
 
-        {/* Actions + Theme Switcher */}
-        <div className="flex items-center gap-3 md:gap-4">
+        {/* Actions + Theme Switcher + Mobile Burger */}
+        <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
           <button
             onClick={cycleTheme}
             title="Переключить тему (Тёмная / Светлая / Авто)"
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#09318D]/5 dark:bg-[#132044] border border-[#09318D]/20 dark:border-white/10 text-xs font-medium text-[#09318D] dark:text-slate-200 cursor-pointer hover:border-[#F59ACC] dark:hover:border-[#0297DE]/50 transition-all"
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-[#09318D]/5 dark:bg-[#132044] border border-[#09318D]/20 dark:border-white/10 text-xs font-medium text-[#09318D] dark:text-slate-200 cursor-pointer hover:border-[#F59ACC] dark:hover:border-[#0297DE]/50 transition-all"
           >
             {theme === 'dark' && <Moon className="w-3.5 h-3.5 text-[#0297DE]" />}
             {theme === 'light' && <Sun className="w-3.5 h-3.5 text-[#09318D]" />}
@@ -410,21 +440,82 @@ export const App: React.FC = () => {
 
           {!user ? (
             <button
-              onClick={() => navigateTo('auth')}
-              className="px-4 md:px-5 py-2 md:py-2.5 rounded-[10px] bg-[#09318D] hover:bg-[#07266e] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] text-white text-xs md:text-sm font-semibold transition-all cursor-pointer"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigateTo('auth');
+              }}
+              className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-[10px] bg-[#09318D] hover:bg-[#07266e] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] text-white text-xs sm:text-sm font-semibold transition-all cursor-pointer"
             >
               Войти
             </button>
           ) : (
             <button
-              onClick={() => navigateTo(page === 'dashboard' ? 'landing' : 'dashboard')}
-              className="px-4 md:px-5 py-2 md:py-2.5 rounded-[10px] bg-[#09318D] hover:bg-[#07266e] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] text-white text-xs md:text-sm font-semibold transition-all cursor-pointer"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigateTo(page === 'dashboard' ? 'landing' : 'dashboard');
+              }}
+              className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-[10px] bg-[#09318D] hover:bg-[#07266e] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] text-white text-xs sm:text-sm font-semibold transition-all cursor-pointer"
             >
               {page === 'dashboard' ? 'На главную' : 'Кабинет'}
             </button>
           )}
+
+          {/* Кнопка мобильного меню (Гамбургер) */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="lg:hidden p-2 rounded-xl bg-slate-100 dark:bg-white/10 text-[#09318D] dark:text-white cursor-pointer hover:bg-slate-200 dark:hover:bg-white/15 transition-all"
+            aria-label="Меню навигации"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </div>
       </header>
+
+      {/* Мобильная шторка меню (Mobile & Tablet Drawer) */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden fixed inset-x-0 top-16 z-30 p-4 bg-white/95 dark:bg-[#081026]/95 backdrop-blur-xl border-b border-slate-200 dark:border-white/10 shadow-2xl transition-all animate-in slide-in-from-top-2 duration-200">
+          <div className="flex flex-col gap-2 max-w-lg mx-auto">
+            <button
+              onClick={() => scrollToSection('features')}
+              className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-sm font-semibold text-slate-800 dark:text-slate-200 text-left cursor-pointer"
+            >
+              <span>Возможности</span>
+              <Sparkles className="w-4 h-4 text-[#0297DE]" />
+            </button>
+            <button
+              onClick={() => scrollToSection('models')}
+              className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-sm font-semibold text-slate-800 dark:text-slate-200 text-left cursor-pointer"
+            >
+              <span>Модели нейросетей</span>
+              <LayoutGrid className="w-4 h-4 text-[#FC734D]" />
+            </button>
+            <button
+              onClick={() => scrollToSection('pricing')}
+              className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-sm font-semibold text-slate-800 dark:text-slate-200 text-left cursor-pointer"
+            >
+              <span>Тарифы и подписки</span>
+              <CreditCard className="w-4 h-4 text-emerald-500" />
+            </button>
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigateTo('docs');
+              }}
+              className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-sm font-semibold text-slate-800 dark:text-slate-200 text-left cursor-pointer"
+            >
+              <span>Документация API</span>
+              <BookOpen className="w-4 h-4 text-[#0297DE]" />
+            </button>
+            <button
+              onClick={() => scrollToSection('faq')}
+              className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-sm font-semibold text-slate-800 dark:text-slate-200 text-left cursor-pointer"
+            >
+              <span>Частые вопросы (FAQ)</span>
+              <HelpCircle className="w-4 h-4 text-amber-500" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ================= PAGE ROUTER ================= */}
       {page === 'landing' && (
@@ -503,9 +594,12 @@ export const App: React.FC = () => {
       )}
 
       {/* ================= MOBILE BOTTOM TAB BAR ================= */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-[70px] px-5 flex items-center justify-between bg-white/95 dark:bg-[#060D21]/95 backdrop-blur-lg border-t border-slate-200 dark:border-white/10">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 h-[68px] px-3 sm:px-6 flex items-center justify-around bg-white/95 dark:bg-[#060D21]/95 backdrop-blur-lg border-t border-slate-200 dark:border-white/10 shadow-lg">
         <button
-          onClick={() => navigateTo('landing')}
+          onClick={() => {
+            setMobileMenuOpen(false);
+            navigateTo('landing');
+          }}
           className={`flex flex-col items-center gap-1 text-[11px] font-medium cursor-pointer ${
             page === 'landing' ? 'text-[#FC734D]' : 'text-slate-500 dark:text-slate-400'
           }`}
@@ -514,17 +608,19 @@ export const App: React.FC = () => {
           <span>Главная</span>
         </button>
 
-        <a
-          href="#pricing"
-          onClick={() => navigateTo('landing')}
-          className="flex flex-col items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400"
+        <button
+          onClick={() => scrollToSection('pricing')}
+          className="flex flex-col items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 cursor-pointer"
         >
           <CreditCard className="w-5 h-5" />
           <span>Тарифы</span>
-        </a>
+        </button>
 
         <button
-          onClick={() => navigateTo('docs')}
+          onClick={() => {
+            setMobileMenuOpen(false);
+            navigateTo('docs');
+          }}
           className={`flex flex-col items-center gap-1 text-[11px] font-medium cursor-pointer ${
             page === 'docs' ? 'text-[#FC734D]' : 'text-slate-500 dark:text-slate-400'
           }`}
@@ -533,17 +629,19 @@ export const App: React.FC = () => {
           <span>Документация</span>
         </button>
 
-        <a
-          href="#models"
-          onClick={() => navigateTo('landing')}
-          className="flex flex-col items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400"
+        <button
+          onClick={() => scrollToSection('models')}
+          className="flex flex-col items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 cursor-pointer"
         >
           <LayoutGrid className="w-5 h-5" />
           <span>Модели</span>
-        </a>
+        </button>
 
         <button
-          onClick={() => openProtectedPage('dashboard')}
+          onClick={() => {
+            setMobileMenuOpen(false);
+            openProtectedPage('dashboard');
+          }}
           className={`flex flex-col items-center gap-1 text-[11px] font-medium cursor-pointer ${
             page === 'dashboard' || page === 'auth'
               ? 'text-[#FC734D]'

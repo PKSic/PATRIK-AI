@@ -196,8 +196,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   return (
     <div className="space-y-6">
       {/* Sub-navigation */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="inline-flex p-1 rounded-xl bg-slate-200 dark:bg-[#070E24] border border-slate-300 dark:border-white/10">
+      <div className="flex flex-wrap items-center justify-between gap-3 w-full max-w-full">
+        <div className="flex flex-wrap gap-1.5 p-1 rounded-xl bg-slate-200 dark:bg-[#070E24] border border-slate-300 dark:border-white/10 max-w-full overflow-x-auto no-scrollbar">
           {[
             { id: 'plans', label: 'Тарифы и Токены', icon: <Package className="w-4 h-4" /> },
             { id: 'content', label: 'Тексты и Главная', icon: <Sliders className="w-4 h-4" /> },
@@ -212,14 +212,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <button
               key={t.id}
               onClick={() => setSubTab(t.id as typeof subTab)}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all relative ${
+              className={`inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all relative ${
                 subTab === t.id
                   ? 'bg-[#FC734D] text-white'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               {t.icon}
-              {t.label}
+              <span>{t.label}</span>
               {typeof t.badge === 'number' && (
                 <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-500 text-white">
                   {t.badge}
@@ -441,6 +441,59 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             Сохранить все изменения на сайте
           </button>
         </form>
+      )}
+
+      {/* 3. USERS LIST (ПОЛЬЗОВАТЕЛИ) */}
+      {subTab === 'users' && (
+        <div className="rounded-2xl bg-white/90 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 p-5 sm:p-6 space-y-4 backdrop-blur-md">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Users className="w-5 h-5 text-[#0297DE]" />
+              Зарегистрированные пользователи ({usersList.length})
+            </h3>
+          </div>
+
+          {usersList.length === 0 ? (
+            <p className="text-sm text-slate-500 py-6 text-center">Пользователей пока нет или данные загружаются...</p>
+          ) : (
+            <div className="overflow-x-auto max-w-full no-scrollbar">
+              <table className="w-full text-left text-xs sm:text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-white/10 text-[11px] uppercase tracking-wider text-slate-500">
+                    <th className="py-3 px-3">ID</th>
+                    <th className="py-3 px-3">Пользователь</th>
+                    <th className="py-3 px-3">Email</th>
+                    <th className="py-3 px-3">Тариф</th>
+                    <th className="py-3 px-3">Роль</th>
+                    <th className="py-3 px-3">Ключи</th>
+                    <th className="py-3 px-3 text-right">Платежи</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:border-white/10">
+                  {usersList.map((u) => (
+                    <tr key={u.id} className="hover:bg-slate-100/50 dark:hover:bg-white/5">
+                      <td className="py-3 px-3 font-mono text-slate-400">#{u.id}</td>
+                      <td className="py-3 px-3 font-semibold text-slate-900 dark:text-white">{u.full_name}</td>
+                      <td className="py-3 px-3 text-slate-600 dark:text-slate-300 font-mono text-xs">{u.email}</td>
+                      <td className="py-3 px-3">
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-[#0297DE]/15 text-[#0297DE]">
+                          {u.plan_name || 'Без подписки'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${u.role === 'admin' ? 'bg-rose-500/15 text-rose-500' : 'bg-slate-200 dark:bg-white/10 text-slate-500'}`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-slate-600 dark:text-slate-300">{u.keys_count || 0}</td>
+                      <td className="py-3 px-3 text-right font-semibold text-slate-900 dark:text-white">{u.transactions_count || 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
 
       {/* 4. SUPPORT CHAT (ЧАТ ПОДДЕРЖКИ) */}
