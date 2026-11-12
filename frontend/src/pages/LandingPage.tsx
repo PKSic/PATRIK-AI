@@ -15,9 +15,10 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { PatrikLogo } from '../components/PatrikLogo';
-import { PageName, Plan, SiteConfig, SubscriptionInfo } from '../types';
+import { PageName, Plan, SiteConfig, SubscriptionInfo, UserInfo } from '../types';
 
 interface LandingPageProps {
+  user?: UserInfo | null;
   plans: Plan[];
   subscription: SubscriptionInfo | null;
   siteConfig: SiteConfig | null;
@@ -26,6 +27,7 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
+  user,
   plans,
   subscription,
   siteConfig,
@@ -573,24 +575,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* ================= CTA BANNER ================= */}
-      <section className="relative py-20 px-5 md:px-20">
-        <div className="relative z-10 max-w-6xl mx-auto rounded-3xl bg-white/90 dark:bg-[#0E1A3B]/70 border border-[#F59ACC] dark:border-[#FC734D]/40 p-10 md:p-14 text-center backdrop-blur-md shadow-lg shadow-[#09318D]/5">
-          <h2 className="text-2xl md:text-4xl font-bold text-[#09318D] dark:text-white">
-            Готовы ускорить свою работу в 3 раза?
-          </h2>
-          <p className="mt-3 text-[#09318D]/75 dark:text-slate-300">
-            Присоединяйтесь к 120 000+ пользователей PATRIK AI уже сегодня.
-          </p>
-          <button
-            onClick={() => onNavigate('auth')}
-            className="mt-7 inline-flex items-center gap-2.5 px-8 py-4 rounded-xl bg-[#F59ACC] hover:bg-[#ee82bd] text-[#09318D] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] dark:text-white font-semibold transition-all cursor-pointer shadow-lg shadow-[#F59ACC]/30 dark:shadow-[#FC734D]/25"
-          >
-            Создать аккаунт бесплатно
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-      </section>
+      {/* ================= CTA BANNER (скрывается, если пользователь уже авторизован) ================= */}
+      {!user && (
+        <section className="relative py-20 px-5 md:px-20">
+          <div className="relative z-10 max-w-6xl mx-auto rounded-3xl bg-white/90 dark:bg-[#0E1A3B]/70 border border-[#F59ACC] dark:border-[#FC734D]/40 p-10 md:p-14 text-center backdrop-blur-md shadow-lg shadow-[#09318D]/5">
+            <h2 className="text-2xl md:text-4xl font-bold text-[#09318D] dark:text-white">
+              Готовы ускорить свою работу в 3 раза?
+            </h2>
+            <p className="mt-3 text-[#09318D]/75 dark:text-slate-300">
+              Присоединяйтесь к 120 000+ пользователей PATRIK AI уже сегодня.
+            </p>
+            <button
+              onClick={() => onNavigate('auth')}
+              className="mt-7 inline-flex items-center gap-2.5 px-8 py-4 rounded-xl bg-[#F59ACC] hover:bg-[#ee82bd] text-[#09318D] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] dark:text-white font-semibold transition-all cursor-pointer shadow-lg shadow-[#F59ACC]/30 dark:shadow-[#FC734D]/25"
+            >
+              Создать аккаунт бесплатно
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* ================= FOOTER ================= */}
       <footer className="bg-white/95 dark:bg-[#060D21] border-t border-[#09318D]/15 dark:border-white/10 pt-14 pb-24 md:pb-12 px-5 md:px-20">

@@ -401,6 +401,7 @@ export const App: React.FC = () => {
       {/* ================= PAGE ROUTER ================= */}
       {page === 'landing' && (
         <LandingPage
+          user={user}
           plans={plans}
           subscription={subscription}
           siteConfig={siteConfig}
