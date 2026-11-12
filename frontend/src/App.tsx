@@ -271,9 +271,15 @@ export const App: React.FC = () => {
           cardDetails,
         }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        return { ok: false, error: text || 'Ошибка сервера' };
+      }
       if (!res.ok) {
-        return { ok: false, error: data.error || 'Ошибка оплаты' };
+        return { ok: false, error: data?.error || 'Ошибка оплаты' };
       }
 
       // Если создана сессия ожидания оплаты — шлюз эквайринга проводит платёж и шлёт webhook
