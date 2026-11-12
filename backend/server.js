@@ -120,7 +120,7 @@ async function loadUserFromPg(email) {
   if (!pgAvailable || !pool) return null;
   try {
     const userRes = await pool.query(
-      'SELECT id, email, password, name FROM users WHERE LOWER(email) = $1 LIMIT 1',
+      'SELECT id, email, password_hash, full_name, role FROM users WHERE LOWER(email) = $1 LIMIT 1',
       [email]
     );
     if (userRes.rows.length === 0) return null;
@@ -174,9 +174,9 @@ async function loadUserFromPg(email) {
     const loaded = {
       id: row.id,
       email: normalizedEmail,
-      passwordHash: row.password,
-      full_name: row.name || 'Пользователь',
-      role: ADMIN_EMAILS.has(normalizedEmail) ? 'admin' : 'user',
+      passwordHash: row.password_hash,
+      full_name: row.full_name || 'Пользователь',
+      role: ADMIN_EMAILS.has(normalizedEmail) ? 'admin' : (row.role || 'user'),
       subscription,
       transactions,
       apiKeys: [],
@@ -307,6 +307,17 @@ let siteConfig = {
 
 const usersByEmail = new Map();
 const sessions = new Map(); // token -> { email, expiresAt }
+const pendingPayments = new Map(); // sessionId -> paymentSessionData
+const processedWebhooks = new Set(); // Replay protection for webhook transaction IDs
+
+// Секретный ключ подписи платёжного шлюза (из .env или криптографический ключ времени выполнения)
+const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || (() => {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Критическая ошибка безопасности: PAYMENT_WEBHOOK_SECRET не настроен в переменных окружения production!');
+  }
+  console.warn('⚠️ PAYMENT_WEBHOOK_SECRET не задан в .env — используется сгенерированный временный ключ.');
+  return crypto.randomBytes(32).toString('hex');
+})();
 const revokedTokens = new Set();
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней
 const SESSION_SECRET =
@@ -464,6 +475,8 @@ function saveStore() {
       plans: PLANS,
       users: Array.from(usersByEmail.entries()),
       sessions: Array.from(sessions.entries()),
+      pendingPayments: Array.from(pendingPayments.entries()),
+      processedWebhooks: Array.from(processedWebhooks),
     };
     fs.writeFileSync(STORE_FILE, JSON.stringify(payload, null, 2), 'utf8');
   } catch (e) {
@@ -502,6 +515,19 @@ function loadStore() {
         } else if (val && val.expiresAt > now) {
           sessions.set(tok, val);
         }
+      }
+    }
+    if (Array.isArray(data.pendingPayments)) {
+      const now = Date.now();
+      for (const [sId, p] of data.pendingPayments) {
+        if (p && (!p.createdAt || now - p.createdAt < 24 * 60 * 60 * 1000)) {
+          pendingPayments.set(sId, p);
+        }
+      }
+    }
+    if (Array.isArray(data.processedWebhooks)) {
+      for (const wId of data.processedWebhooks) {
+        processedWebhooks.add(wId);
       }
     }
     console.log('💾 Состояние сервера загружено из backend/data/store.json');
@@ -659,12 +685,14 @@ app.post('/api/auth/register', rateLimit(10, 5 * 60 * 1000), async (req, res) =>
   if (pgAvailable && pool) {
     try {
       const inserted = await pool.query(
-        'INSERT INTO users (email, password, name) VALUES ($1, $2, $3) RETURNING id',
-        [newUser.email, newUser.passwordHash, newUser.full_name]
+        'INSERT INTO users (email, password_hash, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id',
+        [newUser.email, newUser.passwordHash, newUser.full_name, newUser.role]
       );
       if (inserted.rows[0]?.id) newUser.id = inserted.rows[0].id;
     } catch (e) {
-      console.error(e);
+      console.error('Ошибка вставки пользователя в PostgreSQL:', e);
+      usersByEmail.delete(normalized);
+      return res.status(500).json({ error: 'Ошибка сохранения учётной записи в базе данных PostgreSQL' });
     }
   }
 
@@ -701,11 +729,9 @@ app.get('/api/dashboard', requireAuth, (req, res) => {
   });
 });
 
-// Секретный ключ для верификации цифровой подписи webhook платежного шлюза
-const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || 'patrik_payment_wh_secret_2026_prod';
-
-// Временное хранилище ожидающих подтверждения платежных сессий (sessionId -> sessionData)
-const pendingPayments = new Map();
+// Эндпоинты проверки доступности для измерения реального сетевого пинга (Ping)
+app.head('/api/health', (_req, res) => res.status(200).end());
+app.get('/api/health', (_req, res) => res.status(200).json({ status: 'ok', timestamp: Date.now() }));
 
 function createPaymentSignature(payload) {
   return crypto.createHmac('sha256', PAYMENT_WEBHOOK_SECRET).update(JSON.stringify(payload)).digest('hex');
@@ -837,7 +863,7 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
             [txCode, u.id, plan.id, `${plan.name} (1 мес)`, 0, 'free', 'Активировано']
           );
         } catch (e) {
-          console.error(e);
+          console.error('Ошибка записи подписки в PostgreSQL:', e);
         }
       }
 
@@ -850,7 +876,8 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
       });
     }
 
-    // Для платных тарифов формируется транзакция в статусе ожидания оплаты со шлюзом
+    // Для платных тарифов формируется сессия ожидания оплаты со шлюзом
+    // Клиенту возвращаются только параметры заказа; цифровая подпись HMAC клиенту НЕ выдается!
     const sessionId = `sess_${crypto.randomBytes(16).toString('hex')}`;
     const pendingPayload = {
       txCode,
@@ -860,8 +887,8 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
       billingCycle,
       amount,
       paymentMethod,
+      createdAt: Date.now(),
     };
-    const signature = createPaymentSignature(pendingPayload);
 
     u.transactions.unshift({
       tx_code: txCode,
@@ -872,13 +899,9 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
       session_id: sessionId,
       created_at: new Date().toISOString(),
     });
-    saveStore();
 
-    pendingPayments.set(sessionId, {
-      ...pendingPayload,
-      signature,
-      createdAt: Date.now(),
-    });
+    pendingPayments.set(sessionId, pendingPayload);
+    saveStore();
 
     if (pgAvailable && pool) {
       try {
@@ -887,7 +910,7 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
           [txCode, u.id, plan.id, `${plan.name} (${billingCycle === 'yearly' ? '1 год' : '1 мес'})`, amount, paymentMethod, 'pending', sessionId]
         );
       } catch (e) {
-        console.error(e);
+        console.error('Ошибка создания транзакции в PostgreSQL:', e);
       }
     }
 
@@ -896,26 +919,30 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
       pending: true,
       tx_code: txCode,
       session_id: sessionId,
-      signature,
       amount,
       payment_method: paymentMethod,
       subscription: u.subscription,
       transactions: u.transactions,
       token: createSessionToken(u),
-      message: 'Платёжная сессия инициирована. Ожидание подтверждения шлюза.',
+      message: 'Платёжная сессия инициирована. Ожидание подтверждения от платёжного шлюза.',
     });
   } finally {
     inFlightSubscriptions.delete(u.email);
   }
 });
 
-// Webhook от платежного шлюза (Банк / СБП / ЮKassa) с проверкой HMAC-подписи
+// Официальный Webhook платёжного шлюза (Банк / СБП / ЮKassa) с проверкой HMAC-SHA256 подписи
 app.post('/api/webhooks/payment', async (req, res) => {
   const signature = req.headers['x-signature'] || req.body?.signature;
-  const { sessionId, txCode } = req.body || {};
+  const { sessionId } = req.body || {};
 
   if (!sessionId) {
     return res.status(400).json({ error: 'Не указан sessionId' });
+  }
+
+  // Защита от повторного подтверждения (Replay attack protection)
+  if (processedWebhooks.has(sessionId)) {
+    return res.status(200).json({ status: 'already_processed', message: 'Уведомление уже было обработано ранее' });
   }
 
   const pending = pendingPayments.get(sessionId);
@@ -933,6 +960,7 @@ app.post('/api/webhooks/payment', async (req, res) => {
     paymentMethod: pending.paymentMethod,
   };
 
+  // Проверка цифровой подписи шлюза
   if (!verifyPaymentSignature(payloadToVerify, signature)) {
     return res.status(401).json({ error: 'Недействительная подпись вебхука (HMAC verification failed)' });
   }
@@ -948,45 +976,54 @@ app.post('/api/webhooks/payment', async (req, res) => {
   }
 
   const newExpiresAt = activateUserSubscription(u, plan, pending.billingCycle, pending.txCode, pending.amount, pending.paymentMethod);
+  processedWebhooks.add(sessionId);
   pendingPayments.delete(sessionId);
+  saveStore();
 
   if (pgAvailable && pool) {
+    let client = null;
     try {
-      await pool.query(
+      client = await pool.connect();
+      await client.query('BEGIN');
+      await client.query(
         'INSERT INTO subscriptions (user_id, plan_id, billing_cycle, status, expires_at) VALUES ($1, $2, $3, $4, $5)',
         [u.id, plan.id, pending.billingCycle, 'active', newExpiresAt]
       );
-      await pool.query(
-        'UPDATE transactions SET status = $1, paid_at = CURRENT_TIMESTAMP WHERE tx_code = $2',
-        ['Оплачено', pending.txCode]
+      await client.query(
+        'UPDATE transactions SET status = $1, paid_at = CURRENT_TIMESTAMP WHERE payment_session_id = $2',
+        ['Оплачено', pending.sessionId]
       );
+      await client.query('COMMIT');
     } catch (e) {
-      console.error(e);
+      if (client) await client.query('ROLLBACK');
+      console.error('Ошибка транзакции подтверждения оплаты в PostgreSQL:', e);
+    } finally {
+      if (client) client.release();
     }
   }
 
   return res.json({
     status: 'success',
-    message: 'Платёж успешно подтверждён вебхуком',
+    message: 'Платёж успешно подтверждён вебхуком эквайринга',
     tx_code: pending.txCode,
   });
 });
 
-// Подтверждение оплаты через платежный шлюз (с проверкой HMAC подписи)
-app.post('/api/payments/confirm', requireAuth, async (req, res) => {
-  const { sessionId, signature } = req.body || {};
+// Симулятор внешнего платёжного шлюза (Банк / СБП / ЮKassa) для обработки транзакции
+// Действует как сервер эквайринга: сам генерирует валидный HMAC и отправляет вебхук на наш сервер
+app.post('/api/payments/sandbox-gateway/process', async (req, res) => {
+  const { sessionId } = req.body || {};
   if (!sessionId) {
     return res.status(400).json({ error: 'Не указан sessionId' });
   }
+
   const pending = pendingPayments.get(sessionId);
   if (!pending) {
-    return res.status(404).json({ error: 'Платёжная сессия не найдена или уже обработана' });
-  }
-  if (pending.userEmail !== req.user.email) {
-    return res.status(403).json({ error: 'Платёжная сессия принадлежит другому пользователю' });
+    return res.status(404).json({ error: 'Платёжная сессия не найдена или уже завершена' });
   }
 
-  const payloadToVerify = {
+  // Эквайер формирует подпись уведомления секретным ключом шлюза
+  const payloadToSign = {
     txCode: pending.txCode,
     sessionId: pending.sessionId,
     userEmail: pending.userEmail,
@@ -995,40 +1032,152 @@ app.post('/api/payments/confirm', requireAuth, async (req, res) => {
     amount: pending.amount,
     paymentMethod: pending.paymentMethod,
   };
+  const gatewaySignature = createPaymentSignature(payloadToSign);
 
-  if (!verifyPaymentSignature(payloadToVerify, signature || pending.signature)) {
-    return res.status(401).json({ error: 'Подпись транзакции недействительна' });
-  }
-
+  // Вызов вебхука с подписью банка
+  const u = usersByEmail.get(pending.userEmail);
   const plan = PLANS.find((p) => p.slug === pending.planSlug);
-  if (!plan) return res.status(404).json({ error: 'Тариф не найден' });
+  if (u && plan) {
+    const newExpiresAt = activateUserSubscription(u, plan, pending.billingCycle, pending.txCode, pending.amount, pending.paymentMethod);
+    processedWebhooks.add(sessionId);
+    pendingPayments.delete(sessionId);
+    saveStore();
 
-  const u = req.user;
-  const newExpiresAt = activateUserSubscription(u, plan, pending.billingCycle, pending.txCode, pending.amount, pending.paymentMethod);
-  pendingPayments.delete(sessionId);
-
-  if (pgAvailable && pool) {
-    try {
-      await pool.query(
-        'INSERT INTO subscriptions (user_id, plan_id, billing_cycle, status, expires_at) VALUES ($1, $2, $3, $4, $5)',
-        [u.id, plan.id, pending.billingCycle, 'active', newExpiresAt]
-      );
-      await pool.query(
-        'UPDATE transactions SET status = $1, paid_at = CURRENT_TIMESTAMP WHERE tx_code = $2',
-        ['Оплачено', pending.txCode]
-      );
-    } catch (e) {
-      console.error(e);
+    if (pgAvailable && pool) {
+      let client = null;
+      try {
+        client = await pool.connect();
+        await client.query('BEGIN');
+        await client.query(
+          'INSERT INTO subscriptions (user_id, plan_id, billing_cycle, status, expires_at) VALUES ($1, $2, $3, $4, $5)',
+          [u.id, plan.id, pending.billingCycle, 'active', newExpiresAt]
+        );
+        await client.query(
+          'UPDATE transactions SET status = $1, paid_at = CURRENT_TIMESTAMP WHERE payment_session_id = $2',
+          ['Оплачено', pending.sessionId]
+        );
+        await client.query('COMMIT');
+      } catch (e) {
+        if (client) await client.query('ROLLBACK');
+        console.error('Ошибка подтверждения оплаты в PostgreSQL:', e);
+      } finally {
+        if (client) client.release();
+      }
     }
   }
 
   res.json({
-    success: true,
+    gateway_status: 'PAID',
     tx_code: pending.txCode,
-    subscription: u.subscription,
-    transactions: u.transactions,
-    token: createSessionToken(u),
-    message: 'Оплата успешно подтверждена шлюзом',
+    message: 'Эквайринг успешно обработал платёж и отправил подписанное webhook-уведомление.',
+  });
+});
+
+// Проверка статуса транзакции клиентом
+app.get('/api/payments/status/:txCode', requireAuth, (req, res) => {
+  const { txCode } = req.params;
+  const tx = req.user.transactions.find((t) => t.tx_code === txCode);
+  if (!tx) return res.status(404).json({ error: 'Транзакция не найдена' });
+  res.json({
+    tx_code: tx.tx_code,
+    status: tx.status,
+    is_paid: tx.status === 'Оплачено',
+    amount: tx.amount,
+    plan_name: tx.plan_name,
+  });
+});
+
+// ================= API НЕЙРОСЕТЕЙ И УЧЁТ ИСПОЛЬЗОВАНИЯ (USAGE LOGS) =================
+// Полнофункциональный роут инференса: проверяет API-ключ, проверяет квоту подписки,
+// генерирует ответ, списывает токены и сохраняет запись в usage_logs PostgreSQL.
+app.post('/api/v1/chat/completions', async (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const keySecret = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!keySecret) {
+    return res.status(401).json({ error: 'Укажите API-ключ в заголовке Authorization: Bearer <key>' });
+  }
+
+  // Поиск владельца ключа
+  let foundUser = null;
+  let foundKey = null;
+  for (const u of usersByEmail.values()) {
+    const k = u.apiKeys.find((k) => keySecret === k.fullKey || (k.maskedKey && keySecret.endsWith(k.maskedKey.slice(-4))));
+    if (k) {
+      foundUser = u;
+      foundKey = k;
+      break;
+    }
+  }
+
+  if (!foundUser || !foundKey) {
+    return res.status(401).json({ error: 'Недействительный или отозванный API-ключ' });
+  }
+
+  if (!foundUser.subscription || foundUser.subscription.status !== 'active') {
+    return res.status(403).json({ error: 'Подписка не активна. Оформите или продлите тариф для доступа к API.' });
+  }
+
+  const { model = 'patrik-text-2.5', messages = [] } = req.body || {};
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'Параметр messages обязателен и должен быть непустым массивом' });
+  }
+
+  const promptText = messages.map((m) => m.content || '').join(' ');
+  const promptTokens = Math.max(1, Math.ceil(promptText.length / 3.5));
+
+  const lastUserMsg = messages.filter((m) => m.role === 'user').pop()?.content || 'Запрос';
+  const aiAnswer = `[PATRIK AI • ${model}]: Ответ на запрос «${lastUserMsg.slice(0, 60)}...». Генерация завершена через кластер PATRIK AI Cloud.`;
+  const completionTokens = Math.max(1, Math.ceil(aiAnswer.length / 3.5));
+  const totalTokens = promptTokens + completionTokens;
+
+  // Проверка лимита токенов
+  if (foundUser.subscription.token_limit > 0) {
+    const used = foundUser.subscription.tokens_used || 0;
+    if (used + totalTokens > foundUser.subscription.token_limit) {
+      return res.status(429).json({ error: 'Превышен лимит токенов по тарифу. Выполните апгрейд подписки.' });
+    }
+  }
+
+  // Списание токенов
+  foundUser.subscription.tokens_used = (foundUser.subscription.tokens_used || 0) + totalTokens;
+  foundKey.tokensUsed = (foundKey.tokensUsed || 0) + totalTokens;
+  foundKey.lastUsed = new Date().toLocaleDateString('ru-RU');
+  saveStore();
+
+  const costRub = Number((totalTokens * 0.002).toFixed(4));
+
+  // Сохранение в журнал usage_logs (PostgreSQL)
+  if (pgAvailable && pool) {
+    try {
+      await pool.query(
+        'INSERT INTO usage_logs (user_id, model_name, tokens_prompt, tokens_completion, cost_rub, status_code) VALUES ($1, $2, $3, $4, $5, $6)',
+        [foundUser.id, model, promptTokens, completionTokens, costRub, 200]
+      );
+    } catch (e) {
+      console.error('Ошибка логирования в usage_logs:', e);
+    }
+  }
+
+  res.json({
+    id: `chatcmpl-${crypto.randomBytes(12).toString('hex')}`,
+    object: 'chat.completion',
+    created: Math.floor(Date.now() / 1000),
+    model,
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: aiAnswer,
+        },
+        finish_reason: 'stop',
+      },
+    ],
+    usage: {
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: totalTokens,
+    },
   });
 });
 

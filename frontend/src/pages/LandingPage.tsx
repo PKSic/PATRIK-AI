@@ -36,12 +36,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 }) => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [openFaq, setOpenFaq] = useState<number>(0);
-  const [ping, setPing] = useState(() => ~~(Math.random() * 25) + 32);
+  const [ping, setPing] = useState<number | null>(null);
+
+  // Измерение реального сетевого пинга (Round-Trip Time) через запрос к /api/health
+  const measureRealPing = async () => {
+    try {
+      const t0 = performance.now();
+      await fetch('/api/health', { method: 'HEAD', cache: 'no-store' });
+      const elapsed = Math.round(performance.now() - t0);
+      setPing(Math.max(1, elapsed));
+    } catch {
+      setPing(null);
+    }
+  };
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setPing(~~(Math.random() * 25) + 32);
-    }, 10 * 60 * 1000);
+    measureRealPing();
+    const timer = setInterval(measureRealPing, 10 * 60 * 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -223,11 +234,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   Пайплайн генерации API
                 </span>
                 <span
-                  onClick={() => setPing(~~(Math.random() * 25) + 32)}
-                  title="Нажмите для обновления пинга"
+                  onClick={measureRealPing}
+                  title="Нажмите для реального измерения задержки сети (Ping RTT)"
                   className="px-2 py-0.5 rounded-full bg-[#09318D]/10 dark:bg-white/10 text-[10px] font-mono text-[#09318D] dark:text-slate-300 cursor-pointer select-none transition-all active:scale-95 hover:bg-[#09318D]/20 dark:hover:bg-white/20"
                 >
-                  {ping}ms ping
+                  {ping !== null ? `${ping}ms ping` : '...'}
                 </span>
               </div>
 

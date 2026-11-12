@@ -266,33 +266,36 @@ export const App: React.FC = () => {
         return { ok: false, error: data.error || 'Ошибка оплаты' };
       }
 
-      // Если создана сессия ожидания оплаты — шлюз подтверждает транзакцию
+      // Если создана сессия ожидания оплаты — шлюз эквайринга проводит платёж и шлёт webhook
       if (data.pending && data.session_id) {
-        const confirmRes = await fetch('/api/payments/confirm', {
+        const gwRes = await fetch('/api/payments/sandbox-gateway/process', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            sessionId: data.session_id,
-            signature: data.signature,
-          }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: data.session_id }),
         });
-        const confirmData = await confirmRes.json();
-        if (!confirmRes.ok) {
-          return { ok: false, error: confirmData.error || 'Ошибка подтверждения оплаты шлюзом' };
+        const gwData = await gwRes.json();
+        if (!gwRes.ok) {
+          return { ok: false, error: gwData.error || 'Ошибка эквайринга' };
         }
-        if (confirmData.token) {
-          setToken(confirmData.token);
-          localStorage.setItem('patrik_token', confirmData.token);
+
+        // Проверяем статус подтверждения транзакции
+        const statusRes = await fetch(`/api/payments/status/${encodeURIComponent(data.tx_code)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const statusData = await statusRes.json();
+        if (statusData?.is_paid) {
+          const dashRes = await fetch('/api/dashboard', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const dashData = await dashRes.json();
+          if (dashData.subscription) {
+            setSubscription(dashData.subscription);
+            localStorage.setItem('patrik_subscription', JSON.stringify(dashData.subscription));
+          }
+          if (dashData.transactions) setTransactions(dashData.transactions);
+          return { ok: true };
         }
-        setSubscription(confirmData.subscription);
-        if (confirmData.subscription) {
-          localStorage.setItem('patrik_subscription', JSON.stringify(confirmData.subscription));
-        }
-        setTransactions(confirmData.transactions);
-        return { ok: true };
+        return { ok: false, error: 'Ожидание подтверждения платежа от банка' };
       }
 
       if (data.token) {
