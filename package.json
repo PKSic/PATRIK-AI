@@ -1,6 +1,8 @@
 {
   "name": "patrik-ai-workspace",
   "version": "1.0.0",
+  "author": "PKSic",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {

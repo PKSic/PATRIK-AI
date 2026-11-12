@@ -2,6 +2,8 @@
   "name": "patrik-ai-frontend",
   "private": true,
   "version": "1.0.0",
+  "author": "PKSic",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",

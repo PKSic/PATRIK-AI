@@ -2,6 +2,8 @@
   "name": "patrik-ai-backend",
   "version": "1.0.0",
   "description": "Backend API for PATRIK AI subscriptions with PostgreSQL",
+  "author": "PKSic",
+  "license": "MIT",
   "main": "server.js",
   "type": "module",
   "scripts": {
