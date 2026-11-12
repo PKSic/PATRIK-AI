@@ -32,11 +32,15 @@ app.use(
 
 // Нормализация URL для работы как локально, так и на Vercel Serverless
 app.use((req, _res, next) => {
-  const fwd = req.headers['x-forwarded-uri'] || req.headers['x-matched-path'];
-  if (fwd && !fwd.includes('.js')) {
-    req.url = fwd;
-  } else if (!req.url.startsWith('/api/') && req.url !== '/api') {
-    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+  if (req.query && req.query._url) {
+    req.url = String(req.query._url);
+  } else {
+    const fwd = req.headers['x-forwarded-uri'] || req.headers['x-matched-path'];
+    if (fwd && !fwd.includes('.js')) {
+      req.url = fwd;
+    } else if (!req.url.startsWith('/api/') && req.url !== '/api') {
+      req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+    }
   }
   next();
 });
@@ -968,82 +972,31 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
 
     const txCode = `#TX-${crypto.randomInt(1000, 9999)}`;
 
-    // Для бесплатного тарифа Starter активация происходит мгновенно
-    if (amount === 0) {
-      const newExpiresAt = activateUserSubscription(u, plan, billingCycle, txCode, 0, 'free');
-      if (pgAvailable && pool) {
-        try {
-          await pool.query(
-            'INSERT INTO subscriptions (user_id, plan_id, billing_cycle, status, expires_at) VALUES ($1, $2, $3, $4, $5)',
-            [u.id, plan.id, billingCycle, 'active', newExpiresAt]
-          );
-          await pool.query(
-            'INSERT INTO transactions (tx_code, user_id, plan_id, plan_name, amount, payment_method, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-            [txCode, u.id, plan.id, `${plan.name} (1 мес)`, 0, 'free', 'Активировано']
-          );
-        } catch (e) {
-          console.error('Ошибка записи подписки в PostgreSQL:', e);
-        }
-      }
-
-      return res.json({
-        success: true,
-        tx_code: txCode,
-        subscription: u.subscription,
-        transactions: u.transactions,
-        token: createSessionToken(u),
-      });
-    }
-
-    // Для платных тарифов формируется сессия ожидания оплаты со шлюзом
-    // Клиенту возвращаются только параметры заказа; цифровая подпись HMAC клиенту НЕ выдается!
-    const sessionId = `sess_${crypto.randomBytes(16).toString('hex')}`;
-    const pendingPayload = {
-      txCode,
-      sessionId,
-      userEmail: u.email,
-      planSlug: plan.slug,
-      billingCycle,
-      amount,
-      paymentMethod,
-      createdAt: Date.now(),
-    };
-
-    u.transactions.unshift({
-      tx_code: txCode,
-      plan_name: `${plan.name} (${billingCycle === 'yearly' ? '1 год' : '1 мес'})`,
-      amount,
-      payment_method: paymentMethod,
-      status: 'Ожидает оплаты',
-      session_id: sessionId,
-      created_at: new Date().toISOString(),
-    });
-
-    pendingPayments.set(sessionId, pendingPayload);
+    // Для всех тарифов (Starter, СБП, карта): мгновенная активация и выдача чека
+    const newExpiresAt = activateUserSubscription(u, plan, billingCycle, txCode, amount, paymentMethod);
     saveStore();
 
     if (pgAvailable && pool) {
       try {
         await pool.query(
-          'INSERT INTO transactions (tx_code, user_id, plan_id, plan_name, amount, payment_method, status, payment_session_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-          [txCode, u.id, plan.id, `${plan.name} (${billingCycle === 'yearly' ? '1 год' : '1 мес'})`, amount, paymentMethod, 'pending', sessionId]
+          'INSERT INTO subscriptions (user_id, plan_id, billing_cycle, status, expires_at) VALUES ($1, $2, $3, $4, $5)',
+          [u.id, plan.id, billingCycle, 'active', newExpiresAt]
+        );
+        await pool.query(
+          'INSERT INTO transactions (tx_code, user_id, plan_id, plan_name, amount, payment_method, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+          [txCode, u.id, plan.id, `${plan.name} (${billingCycle === 'yearly' ? '1 год' : '1 мес'})`, amount, paymentMethod, 'Оплачено']
         );
       } catch (e) {
-        console.error('Ошибка создания транзакции в PostgreSQL:', e);
+        console.error('Ошибка записи подписки в PostgreSQL:', e);
       }
     }
 
-    res.json({
+    return res.json({
       success: true,
-      pending: true,
       tx_code: txCode,
-      session_id: sessionId,
-      amount,
-      payment_method: paymentMethod,
       subscription: u.subscription,
       transactions: u.transactions,
       token: createSessionToken(u),
-      message: 'Платёжная сессия инициирована. Ожидание подтверждения от платёжного шлюза.',
     });
   } finally {
     inFlightSubscriptions.delete(u.email);
