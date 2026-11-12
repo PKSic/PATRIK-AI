@@ -64,6 +64,26 @@ interface DashboardPageProps {
   onUserUpdated?: (user: UserInfo, token?: string) => void;
 }
 
+// Умное слияние сообщений без дубликатов с сохранением хронологии
+function mergeSupportMessages(current: SupportMessage[], incoming: SupportMessage[]): SupportMessage[] {
+  const map = new Map<string, SupportMessage>();
+  for (const m of current) {
+    if (!m) continue;
+    const key = m.id ? String(m.id) : `${m.sender}_${m.text}_${m.createdAt}`;
+    map.set(key, m);
+  }
+  for (const m of incoming) {
+    if (!m) continue;
+    const key = m.id ? String(m.id) : `${m.sender}_${m.text}_${m.createdAt}`;
+    map.set(key, m);
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    const ta = new Date(a.createdAt || 0).getTime();
+    const tb = new Date(b.createdAt || 0).getTime();
+    return ta - tb;
+  });
+}
+
 export const DashboardPage: React.FC<DashboardPageProps> = ({
   token,
   user,
@@ -126,7 +146,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     } catch {}
   }, [user]);
 
-  // Загрузка сообщений пользователя с сервера (привязка к аккаунту)
+  // Загрузка сообщений пользователя с сервера (привязка к аккаунту с защитой от затирания)
   const loadUserSupportMessages = async () => {
     setLoadingSupport(true);
     try {
@@ -134,11 +154,22 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : (data.messages || data.list || []);
-        setSupportMessages(list);
-        if (user?.id) {
-          localStorage.setItem(`patrik_support_msgs_${user.id}`, JSON.stringify(list));
+        const text = await res.text();
+        let data: any = null;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          return;
+        }
+        const incoming = Array.isArray(data) ? data : (data?.messages || data?.list || []);
+        if (Array.isArray(incoming) && incoming.length > 0) {
+          setSupportMessages((prev) => {
+            const merged = mergeSupportMessages(prev, incoming);
+            if (user?.id) {
+              localStorage.setItem(`patrik_support_msgs_${user.id}`, JSON.stringify(merged));
+            }
+            return merged;
+          });
         }
       }
     } catch (e) {
@@ -173,11 +204,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       }
       if (res.ok && data?.userMessage && data?.botMessage) {
         setSupportMessages((prev) => {
-          const updated = [...prev, data.userMessage, data.botMessage];
+          const merged = mergeSupportMessages(prev, [data.userMessage, data.botMessage]);
           if (user?.id) {
-            localStorage.setItem(`patrik_support_msgs_${user.id}`, JSON.stringify(updated));
+            localStorage.setItem(`patrik_support_msgs_${user.id}`, JSON.stringify(merged));
           }
-          return updated;
+          return merged;
         });
         setSupportNotice({
           type: 'ok',
@@ -308,16 +339,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       if (res.ok && data) {
         const newMsg = data.message || data;
         setSupportMessages((prev) => {
-          const updated = [...prev, newMsg];
+          const merged = mergeSupportMessages(prev, [newMsg]);
           if (user?.id) {
-            localStorage.setItem(`patrik_support_msgs_${user.id}`, JSON.stringify(updated));
+            localStorage.setItem(`patrik_support_msgs_${user.id}`, JSON.stringify(merged));
           }
-          return updated;
+          return merged;
         });
         setSupportText('');
         setSupportNotice({
           type: 'ok',
-          text: '✓ Сообщение отправлено! Администратор уведомлен в Telegram-боте.',
+          text: '✓ Сообщение отправлено! Мы ответим вам в ближайшее время.',
         });
         setTimeout(() => setSupportNotice(null), 5000);
       } else {
@@ -1149,7 +1180,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               </div>
 
               {/* Быстрые темы для мгновенного авто-ответа */}
-              <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-[#0297DE]/8 via-white to-[#FC734D]/8 dark:from-[#0297DE]/15 dark:via-[#0E1A3B] dark:to-[#FC734D]/15 border border-[#0297DE]/20 dark:border-white/10 space-y-2 shadow-sm">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-50/70 via-white/80 to-amber-50/70 dark:from-[#0297DE]/15 dark:via-[#0E1A3B] dark:to-[#FC734D]/15 border border-[#0297DE]/20 dark:border-white/10 space-y-2 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-[#FC734D]" />
                   <span>Быстрые темы с мгновенным авто-ответом:</span>
@@ -1203,11 +1234,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     </p>
                   </div>
                 ) : (
-                  supportMessages.map((m) => {
+                  supportMessages.map((m, idx) => {
                     const isUser = m.sender === 'user';
+                    const itemKey = m.id ? `msg_${m.id}` : `msg_${idx}_${m.createdAt || ''}`;
                     return (
                       <div
-                        key={m.id}
+                        key={itemKey}
                         className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
                       >
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mb-1 px-1">

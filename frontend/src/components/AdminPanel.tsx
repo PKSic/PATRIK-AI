@@ -22,6 +22,25 @@ interface AdminPanelProps {
   onConfigUpdated: (cfg: SiteConfig) => void;
 }
 
+function mergeSupportMessages(current: SupportMessage[], incoming: SupportMessage[]): SupportMessage[] {
+  const map = new Map<string, SupportMessage>();
+  for (const m of current) {
+    if (!m) continue;
+    const key = m.id ? String(m.id) : `${m.sender}_${m.text}_${m.createdAt}`;
+    map.set(key, m);
+  }
+  for (const m of incoming) {
+    if (!m) continue;
+    const key = m.id ? String(m.id) : `${m.sender}_${m.text}_${m.createdAt}`;
+    map.set(key, m);
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    const ta = new Date(a.createdAt || 0).getTime();
+    const tb = new Date(b.createdAt || 0).getTime();
+    return ta - tb;
+  });
+}
+
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   token,
   plans,
@@ -85,7 +104,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  // Загрузка сообщений выбранного пользователя
+  // Загрузка сообщений выбранного пользователя с умным слиянием
   const loadMessages = async (userId: number) => {
     setLoadingMessages(true);
     try {
@@ -94,8 +113,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data) ? data : (data.messages || data.list || []);
-        setChatMessages(list);
+        const incoming = Array.isArray(data) ? data : (data.messages || data.list || []);
+        if (Array.isArray(incoming) && incoming.length > 0) {
+          setChatMessages((prev) => mergeSupportMessages(prev, incoming));
+        }
         // Обновляем бейдж непрочитанных у этого чата локально
         setChats((prev) =>
           prev.map((c) => (c.userId === userId ? { ...c, unreadCount: 0 } : c))
@@ -140,7 +161,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (res.ok) {
         const resData = await res.json();
         const newMsg = resData.message || resData;
-        setChatMessages((prev) => [...prev, newMsg]);
+        setChatMessages((prev) => mergeSupportMessages(prev, [newMsg]));
         setReplyText('');
         showNotice('Ответ отправлен пользователю и сохранён в зашифрованном виде!');
         loadChats();
@@ -609,11 +630,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         В этом диалоге ещё нет сообщений.
                       </p>
                     ) : (
-                      chatMessages.map((m) => {
+                      chatMessages.map((m, idx) => {
                         const isAdmin = m.sender === 'admin';
+                        const itemKey = m.id ? `admin_msg_${m.id}` : `admin_idx_${idx}_${m.createdAt || ''}`;
                         return (
                           <div
-                            key={m.id}
+                            key={itemKey}
                             className={`flex flex-col ${isAdmin ? 'items-end' : 'items-start'}`}
                           >
                             <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mb-1 px-1">

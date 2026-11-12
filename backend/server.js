@@ -239,6 +239,10 @@ const SUPPORT_KEY_BUF = crypto.createHash('sha256').update(SUPPORT_ENCRYPTION_KE
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8751417025:AAEOl_Vmo5NGRZFIHgUQC7FBfdrKD4RakCQ';
 const TELEGRAM_ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || '5103486897';
 
+function generateMessageId() {
+  return `${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+}
+
 function encryptSupportMessage(plainText) {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', SUPPORT_KEY_BUF, iv);
@@ -1395,15 +1399,42 @@ app.get('/api/admin/users', requireAuth, requireAdmin, (_req, res) => {
 // Получение истории сообщений текущего пользователя
 app.get('/api/support/messages', requireAuth, async (req, res) => {
   const u = req.user;
-  const list = supportMessages
-    .filter((m) => m.userId === u.id || (m.userEmail && m.userEmail.toLowerCase() === u.email.toLowerCase()))
-    .map((m) => ({
-      id: m.id,
-      sender: m.sender,
-      userName: m.userName,
-      text: decryptSupportMessage(m.encrypted_text, m.iv, m.auth_tag),
-      createdAt: m.createdAt,
-    }));
+  let list = [];
+
+  if (pgAvailable && pool) {
+    try {
+      const qRes = await pool.query(
+        'SELECT id, sender, encrypted_text, iv, auth_tag, created_at FROM support_messages WHERE user_id = $1 ORDER BY id ASC',
+        [u.id]
+      );
+      if (qRes.rows.length > 0) {
+        list = qRes.rows.map((r) => ({
+          id: r.id,
+          sender: r.sender,
+          userName: r.sender === 'user' ? (u.full_name || 'Пользователь') : 'Поддержка PATRIK AI',
+          text: decryptSupportMessage(r.encrypted_text, r.iv, r.auth_tag),
+          createdAt: r.created_at,
+        }));
+      }
+    } catch (e) {
+      console.warn('Postgres support read:', e.message);
+    }
+  }
+
+  if (list.length === 0) {
+    list = supportMessages
+      .filter((m) => m.userId === u.id || (m.userEmail && m.userEmail.toLowerCase() === u.email.toLowerCase()))
+      .map((m) => ({
+        id: m.id,
+        sender: m.sender,
+        userName: m.userName,
+        text: decryptSupportMessage(m.encrypted_text, m.iv, m.auth_tag),
+        createdAt: m.createdAt,
+      }));
+  }
+
+  // Всегда сортируем в строгом хронологическом порядке
+  list.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
   res.json({ success: true, messages: list, list });
 });
 
@@ -1422,7 +1453,7 @@ app.post('/api/support/topic', requireAuth, rateLimit(30, 60 * 1000), async (req
   // 1. Шифруем и сохраняем вопрос пользователя
   const encQ = encryptSupportMessage(cleanQ);
   const userMsgRecord = {
-    id: supportMessages.length + 1,
+    id: generateMessageId(),
     userId: u.id,
     userEmail: u.email,
     userName: u.full_name || 'Пользователь',
@@ -1438,7 +1469,7 @@ app.post('/api/support/topic', requireAuth, rateLimit(30, 60 * 1000), async (req
   // 2. Шифруем и сохраняем авто-ответ от службы заботы
   const encA = encryptSupportMessage(cleanA);
   const botMsgRecord = {
-    id: supportMessages.length + 1,
+    id: generateMessageId(),
     userId: u.id,
     userEmail: u.email,
     userName: 'Бот заботы PATRIK AI',
@@ -1496,7 +1527,7 @@ app.post('/api/support/messages', requireAuth, rateLimit(30, 60 * 1000), async (
   const u = req.user;
   const enc = encryptSupportMessage(clean);
   const msgRecord = {
-    id: supportMessages.length + 1,
+    id: generateMessageId(),
     userId: u.id,
     userEmail: u.email,
     userName: u.full_name || 'Пользователь',
@@ -1622,7 +1653,7 @@ app.post('/api/admin/support/messages/:userId', requireAuth, requireAdmin, async
 
   const enc = encryptSupportMessage(clean);
   const msgRecord = {
-    id: supportMessages.length + 1,
+    id: generateMessageId(),
     userId: targetUser ? targetUser.id : targetId,
     userEmail: targetUser ? targetUser.email : targetEmail,
     userName: 'Поддержка PATRIK AI',
