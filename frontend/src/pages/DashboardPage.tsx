@@ -141,19 +141,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   useEffect(() => {
     setProfileName(user.full_name || '');
     setProfileEmail(user.email || '');
-    // Восстанавливаем сохранённые сообщения для текущего пользователя по email и id
+    // Восстанавливаем сохранённые сообщения для текущего пользователя по email и id без затирания
     try {
-      const byEmail = user?.email ? localStorage.getItem(`patrik_support_msgs_${user.email.toLowerCase()}`) : null;
-      if (byEmail) {
-        setSupportMessages(JSON.parse(byEmail));
-      } else if (user?.id) {
-        const byId = localStorage.getItem(`patrik_support_msgs_${user.id}`);
-        if (byId) {
-          setSupportMessages(JSON.parse(byId));
+      const byEmail = user?.email ? localStorage.getItem(`patrik_support_msgs_${user.email.toLowerCase().trim()}`) : null;
+      const byId = user?.id ? localStorage.getItem(`patrik_support_msgs_${user.id}`) : null;
+      const raw = byEmail || byId;
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (Array.isArray(cached) && cached.length > 0) {
+          setSupportMessages((prev) => mergeSupportMessages(prev, cached));
         }
       }
     } catch {}
-  }, [user]);
+  }, [user.email, user.id]);
 
   // Плавная прокрутка к последнему сообщению при добавлении
   useEffect(() => {
@@ -233,6 +233,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           const merged = mergeSupportMessages(prev, [data.userMessage, data.botMessage]);
           if (user?.id) {
             localStorage.setItem(`patrik_support_msgs_${user.id}`, JSON.stringify(merged));
+          }
+          if (user?.email) {
+            localStorage.setItem(`patrik_support_msgs_${user.email.toLowerCase().trim()}`, JSON.stringify(merged));
           }
           return merged;
         });
@@ -371,6 +374,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           if (user?.id) {
             localStorage.setItem(`patrik_support_msgs_${user.id}`, JSON.stringify(merged));
           }
+          if (user?.email) {
+            localStorage.setItem(`patrik_support_msgs_${user.email.toLowerCase().trim()}`, JSON.stringify(merged));
+          }
           return merged;
         });
         setSupportText('');
@@ -494,6 +500,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       setCardNumber('');
       setCardExpiry('');
       setCardCvc('');
+      // Перезагрузка страницы после успешной записи транзакции в БД
+      setTimeout(() => {
+        window.location.reload();
+      }, 600);
     } else {
       setPayMsg({ type: 'err', text: res.error || 'Ошибка оформления подписки' });
     }
@@ -508,10 +518,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       setShowSbpModal(false);
       if (res.ok) {
         setPayMsg({ type: 'ok', text: `Оплата по СБП подтверждена! Тариф «${currentPlanObj?.name}» активирован.` });
+        // Перезагрузка страницы после успешной записи транзакции в БД
+        setTimeout(() => {
+          window.location.reload();
+        }, 600);
       } else {
         setPayMsg({ type: 'err', text: res.error || 'Ошибка подтверждения оплаты' });
       }
-    }, 2000);
+    }, 1200);
   };
 
   const handleCreateKeySubmit = async (e: React.FormEvent) => {

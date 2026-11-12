@@ -86,14 +86,94 @@ function rateLimit(maxRequests, windowMs) {
 
 app.use('/api', rateLimit(120, 60 * 1000));
 
+const isRemotePg = Boolean(
+  process.env.DATABASE_URL &&
+  !process.env.DATABASE_URL.includes('localhost') &&
+  !process.env.DATABASE_URL.includes('127.0.0.1')
+);
+
 const pool = process.env.DATABASE_URL
   ? new pg.Pool({
       connectionString: process.env.DATABASE_URL,
-      connectionTimeoutMillis: 1500,
+      ssl: isRemotePg ? { rejectUnauthorized: false } : undefined,
+      connectionTimeoutMillis: 5000,
     })
   : null;
 
 let pgAvailable = false;
+
+async function initPgTables() {
+  if (!pool) return;
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password_hash VARCHAR(255) NOT NULL,
+        full_name VARCHAR(150) NOT NULL,
+        role VARCHAR(20) NOT NULL DEFAULT 'user',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS plans (
+        id SERIAL PRIMARY KEY,
+        slug VARCHAR(50) NOT NULL UNIQUE,
+        name VARCHAR(100) NOT NULL,
+        price_monthly INTEGER NOT NULL DEFAULT 0,
+        price_yearly INTEGER NOT NULL DEFAULT 0,
+        token_limit INTEGER NOT NULL DEFAULT 100000,
+        tier INTEGER NOT NULL DEFAULT 1,
+        description TEXT NOT NULL DEFAULT '',
+        features JSONB NOT NULL DEFAULT '[]'::jsonb,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE RESTRICT,
+        billing_cycle VARCHAR(20) NOT NULL DEFAULT 'monthly',
+        status VARCHAR(20) NOT NULL DEFAULT 'active',
+        tokens_used INTEGER NOT NULL DEFAULT 0,
+        token_limit INTEGER NOT NULL DEFAULT 100000,
+        starts_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS transactions (
+        id SERIAL PRIMARY KEY,
+        tx_code VARCHAR(50) NOT NULL UNIQUE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        plan_id INTEGER REFERENCES plans(id) ON DELETE SET NULL,
+        plan_name VARCHAR(150) NOT NULL,
+        amount INTEGER NOT NULL DEFAULT 0,
+        payment_method VARCHAR(30) NOT NULL,
+        status VARCHAR(30) NOT NULL DEFAULT 'Оплачено',
+        payment_session_id VARCHAR(100),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        paid_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS support_messages (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        sender VARCHAR(20) NOT NULL DEFAULT 'user',
+        encrypted_text TEXT NOT NULL,
+        iv VARCHAR(64) NOT NULL,
+        auth_tag VARCHAR(64) NOT NULL,
+        is_read BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('✅ PostgreSQL schema verified/initialized');
+  } catch (err) {
+    console.error('PostgreSQL table init error:', err.message);
+  }
+}
 
 async function checkPostgres() {
   if (!pool) {
@@ -105,14 +185,50 @@ async function checkPostgres() {
     await pool.query('SELECT 1');
     pgAvailable = true;
     console.log('✅ Connected to PostgreSQL');
+    await initPgTables();
     return true;
-  } catch {
+  } catch (err) {
     pgAvailable = false;
-    console.log('ℹ️ PostgreSQL not detected locally — running with secure server store');
+    console.warn('ℹ️ PostgreSQL not available (' + err.message + ') — running with secure server store');
     return false;
   }
 }
 const pgReadyPromise = checkPostgres();
+
+async function ensureUserInPg(user) {
+  await pgReadyPromise;
+  if (!pgAvailable || !pool || !user?.email) return null;
+  try {
+    const norm = user.email.toLowerCase().trim();
+    const existing = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1 LIMIT 1', [norm]);
+    if (existing.rows.length > 0) return existing.rows[0].id;
+    const inserted = await pool.query(
+      'INSERT INTO users (email, password_hash, full_name, role) VALUES ($1, $2, $3, $4) ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name RETURNING id',
+      [norm, user.passwordHash || 'demo_hash', user.full_name || 'Пользователь', user.role || 'user']
+    );
+    return inserted.rows[0].id;
+  } catch (err) {
+    console.error('ensureUserInPg error:', err.message);
+    return null;
+  }
+}
+
+async function ensurePlanInPg(plan) {
+  await pgReadyPromise;
+  if (!pgAvailable || !pool || !plan?.slug) return null;
+  try {
+    const existing = await pool.query('SELECT id FROM plans WHERE slug = $1 LIMIT 1', [plan.slug]);
+    if (existing.rows.length > 0) return existing.rows[0].id;
+    const inserted = await pool.query(
+      'INSERT INTO plans (slug, name, price_monthly, price_yearly, token_limit, tier, description) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id',
+      [plan.slug, plan.name, plan.price_monthly, plan.price_yearly, plan.token_limit, plan.tier, plan.description || '']
+    );
+    return inserted.rows[0].id;
+  } catch (err) {
+    console.error('ensurePlanInPg error:', err.message);
+    return null;
+  }
+}
 
 async function loadUserFromPg(email) {
   await pgReadyPromise;
@@ -1036,16 +1152,21 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
 
     if (pgAvailable && pool) {
       try {
-        await pool.query(
-          'INSERT INTO subscriptions (user_id, plan_id, billing_cycle, status, expires_at) VALUES ($1, $2, $3, $4, $5)',
-          [u.id, plan.id, billingCycle, 'active', newExpiresAt]
-        );
-        await pool.query(
-          'INSERT INTO transactions (tx_code, user_id, plan_id, plan_name, amount, payment_method, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-          [txCode, u.id, plan.id, `${plan.name} (${billingCycle === 'yearly' ? '1 год' : '1 мес'})`, amount, paymentMethod, 'Оплачено']
-        );
+        const pgUserId = await ensureUserInPg(u);
+        const pgPlanId = await ensurePlanInPg(plan);
+        if (pgUserId && pgPlanId) {
+          await pool.query(
+            'INSERT INTO subscriptions (user_id, plan_id, billing_cycle, status, expires_at) VALUES ($1, $2, $3, $4, $5)',
+            [pgUserId, pgPlanId, billingCycle, 'active', newExpiresAt]
+          );
+          await pool.query(
+            'INSERT INTO transactions (tx_code, user_id, plan_id, plan_name, amount, payment_method, status, paid_at) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)',
+            [txCode, pgUserId, pgPlanId, `${plan.name} (${billingCycle === 'yearly' ? '1 год' : '1 мес'})`, amount, paymentMethod, 'Оплачено']
+          );
+          console.log(`✅ Транзакция ${txCode} и подписка успешно записаны в PostgreSQL для user_id ${pgUserId}`);
+        }
       } catch (e) {
-        console.error('Ошибка записи подписки в PostgreSQL:', e);
+        console.error('Ошибка записи подписки в PostgreSQL:', e.message);
       }
     }
 
@@ -1463,18 +1584,21 @@ app.get('/api/support/messages', requireAuth, async (req, res) => {
 
   if (pgAvailable && pool) {
     try {
-      const qRes = await pool.query(
-        'SELECT id, sender, encrypted_text, iv, auth_tag, created_at FROM support_messages WHERE user_id = $1 ORDER BY id ASC',
-        [u.id]
-      );
-      if (qRes.rows.length > 0) {
-        pgList = qRes.rows.map((r) => ({
-          id: r.id,
-          sender: r.sender,
-          userName: r.sender === 'user' ? (u.full_name || 'Пользователь') : 'Поддержка PATRIK AI',
-          text: decryptSupportMessage(r.encrypted_text, r.iv, r.auth_tag),
-          createdAt: r.created_at,
-        }));
+      const pgUserId = await ensureUserInPg(u);
+      if (pgUserId) {
+        const qRes = await pool.query(
+          'SELECT id, sender, encrypted_text, iv, auth_tag, created_at FROM support_messages WHERE user_id = $1 ORDER BY id ASC',
+          [pgUserId]
+        );
+        if (qRes.rows.length > 0) {
+          pgList = qRes.rows.map((r) => ({
+            id: r.id,
+            sender: r.sender,
+            userName: r.sender === 'user' ? (u.full_name || 'Пользователь') : 'Поддержка PATRIK AI',
+            text: decryptSupportMessage(r.encrypted_text, r.iv, r.auth_tag),
+            createdAt: r.created_at,
+          }));
+        }
       }
     } catch (e) {
       console.warn('Postgres support read:', e.message);
@@ -1556,12 +1680,15 @@ app.post('/api/support/topic', requireAuth, rateLimit(30, 60 * 1000), async (req
 
   if (pgAvailable && pool) {
     try {
-      await pool.query(
-        'INSERT INTO support_messages (user_id, sender, encrypted_text, iv, auth_tag, is_read) VALUES ($1, $2, $3, $4, $5, true), ($1, $6, $7, $8, $9, true)',
-        [u.id, 'user', encQ.encrypted_text, encQ.iv, encQ.auth_tag, 'admin', encA.encrypted_text, encA.iv, encA.auth_tag]
-      );
+      const pgUserId = await ensureUserInPg(u);
+      if (pgUserId) {
+        await pool.query(
+          'INSERT INTO support_messages (user_id, sender, encrypted_text, iv, auth_tag, is_read) VALUES ($1, $2, $3, $4, $5, true), ($1, $6, $7, $8, $9, true)',
+          [pgUserId, 'user', encQ.encrypted_text, encQ.iv, encQ.auth_tag, 'admin', encA.encrypted_text, encA.iv, encA.auth_tag]
+        );
+      }
     } catch (e) {
-      console.error('Ошибка записи авто-ответа в PostgreSQL:', e);
+      console.error('Ошибка записи авто-ответа в PostgreSQL:', e.message);
     }
   }
 
@@ -1615,13 +1742,16 @@ app.post('/api/support/messages', requireAuth, rateLimit(30, 60 * 1000), async (
 
   if (pgAvailable && pool) {
     try {
-      const inserted = await pool.query(
-        'INSERT INTO support_messages (user_id, sender, encrypted_text, iv, auth_tag, is_read) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-        [u.id, 'user', enc.encrypted_text, enc.iv, enc.auth_tag, false]
-      );
-      if (inserted.rows[0]?.id) msgRecord.id = inserted.rows[0].id;
+      const pgUserId = await ensureUserInPg(u);
+      if (pgUserId) {
+        const inserted = await pool.query(
+          'INSERT INTO support_messages (user_id, sender, encrypted_text, iv, auth_tag, is_read) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+          [pgUserId, 'user', enc.encrypted_text, enc.iv, enc.auth_tag, false]
+        );
+        if (inserted.rows[0]?.id) msgRecord.id = inserted.rows[0].id;
+      }
     } catch (e) {
-      console.error('Ошибка записи сообщения поддержки в PostgreSQL:', e);
+      console.error('Ошибка записи сообщения поддержки в PostgreSQL:', e.message);
     }
   }
 
