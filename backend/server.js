@@ -7,8 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, 'data');
-const STORE_FILE = path.join(DATA_DIR, 'store.json');
+const DATA_DIR = process.env.VERCEL ? '/tmp' : path.join(__dirname, 'data');
+const STORE_FILE = path.join(DATA_DIR, 'patrik-store.json');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -16,17 +16,22 @@ const PORT = process.env.PORT || 3001;
 // Отключаем заголовок X-Powered-By
 app.disable('x-powered-by');
 
-// Ограничиваем CORS только локальным фронтендом (или ALLOWED_ORIGIN из .env)
+// Ограничиваем CORS локальным фронтендом, доменом Vercel или ALLOWED_ORIGIN из .env
 const ALLOWED_ORIGINS = new Set([
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : []),
   ...(process.env.ALLOWED_ORIGIN ? [process.env.ALLOWED_ORIGIN] : []),
 ]);
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || ALLOWED_ORIGINS.has(origin)) {
+      if (
+        !origin ||
+        ALLOWED_ORIGINS.has(origin) ||
+        /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)
+      ) {
         return callback(null, true);
       }
       return callback(new Error('CORS policy blocked'));
@@ -676,6 +681,10 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 PATRIK AI Backend running at http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 PATRIK AI Backend running at http://localhost:${PORT}`);
+  });
+}
+
+export default app;

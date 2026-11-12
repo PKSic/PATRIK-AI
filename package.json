@@ -4,6 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node dev.mjs"
+    "dev": "node dev.mjs",
+    "build": "npm --prefix frontend run build"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
   }
 }
