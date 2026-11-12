@@ -100,18 +100,94 @@ async function checkPostgres() {
   if (!pool) {
     pgAvailable = false;
     console.log('ℹ️ DATABASE_URL not set — running with secure server store');
-    return;
+    return false;
   }
   try {
     await pool.query('SELECT 1');
     pgAvailable = true;
     console.log('✅ Connected to PostgreSQL');
+    return true;
   } catch {
     pgAvailable = false;
     console.log('ℹ️ PostgreSQL not detected locally — running with secure server store');
+    return false;
   }
 }
-checkPostgres();
+const pgReadyPromise = checkPostgres();
+
+async function loadUserFromPg(email) {
+  await pgReadyPromise;
+  if (!pgAvailable || !pool) return null;
+  try {
+    const userRes = await pool.query(
+      'SELECT id, email, password, name FROM users WHERE LOWER(email) = $1 LIMIT 1',
+      [email]
+    );
+    if (userRes.rows.length === 0) return null;
+    const row = userRes.rows[0];
+    const normalizedEmail = String(row.email).trim().toLowerCase();
+
+    const subRes = await pool.query(
+      `SELECT s.plan_id, s.status, s.expires_at, p.name AS plan_name
+       FROM subscriptions s
+       LEFT JOIN plans p ON p.id = s.plan_id
+       WHERE s.user_id = $1
+       ORDER BY s.id DESC
+       LIMIT 1`,
+      [row.id]
+    );
+    let subscription = null;
+    if (subRes.rows.length > 0) {
+      const subRow = subRes.rows[0];
+      const matchedPlan = PLANS.find((p) => p.id === subRow.plan_id || p.name === subRow.plan_name);
+      if (matchedPlan) {
+        subscription = {
+          plan_slug: matchedPlan.slug,
+          plan_name: matchedPlan.name,
+          tier: matchedPlan.tier,
+          billing_cycle: 'monthly',
+          status: subRow.status || 'active',
+          tokens_used: 0,
+          token_limit: matchedPlan.token_limit,
+          expires_at: subRow.expires_at ? new Date(subRow.expires_at).toISOString().slice(0, 10) : '',
+        };
+      }
+    }
+
+    const payRes = await pool.query(
+      `SELECT pay.id, pay.amount, pay.method, pay.status, p.name AS plan_name
+       FROM payments pay
+       LEFT JOIN plans p ON p.id = pay.plan_id
+       WHERE pay.user_id = $1
+       ORDER BY pay.id DESC
+       LIMIT 20`,
+      [row.id]
+    );
+    const transactions = payRes.rows.map((r) => ({
+      tx_code: `#TX-${r.id}`,
+      plan_name: r.plan_name || 'Подписка',
+      amount: Number(r.amount || 0),
+      payment_method: r.method || 'card',
+      status: r.status || 'Оплачено',
+    }));
+
+    const loaded = {
+      id: row.id,
+      email: normalizedEmail,
+      passwordHash: row.password,
+      full_name: row.name || 'Пользователь',
+      role: ADMIN_EMAILS.has(normalizedEmail) ? 'admin' : 'user',
+      subscription,
+      transactions,
+      apiKeys: [],
+    };
+    usersByEmail.set(normalizedEmail, loaded);
+    return loaded;
+  } catch (e) {
+    console.error('Ошибка чтения пользователя из PostgreSQL:', e);
+    return null;
+  }
+}
 
 // Безопасная очистка строк от управляющих символов и угловых скобок
 function sanitizeText(val, maxLen = 200) {
@@ -231,7 +307,52 @@ let siteConfig = {
 
 const usersByEmail = new Map();
 const sessions = new Map(); // token -> { email, expiresAt }
+const revokedTokens = new Set();
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const SESSION_SECRET =
+  process.env.SESSION_SECRET ||
+  crypto
+    .createHash('sha256')
+    .update(process.env.DATABASE_URL || process.env.VERCEL_PROJECT_ID || 'patrik-local-dev-secret')
+    .digest('hex');
+
+function createSessionToken(email) {
+  const payload = Buffer.from(
+    JSON.stringify({ email, exp: Date.now() + SESSION_TTL_MS })
+  ).toString('base64url');
+  const sig = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
+  return `${payload}.${sig}`;
+}
+
+function verifySessionToken(token) {
+  if (!token || revokedTokens.has(token)) return null;
+  const legacy = sessions.get(token);
+  if (legacy) {
+    if (legacy.expiresAt < Date.now()) {
+      sessions.delete(token);
+      saveStore();
+      return null;
+    }
+    return legacy;
+  }
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [payloadB64, sigHex] = parts;
+  const expectedHex = crypto.createHmac('sha256', SESSION_SECRET).update(payloadB64).digest('hex');
+  const sigBuf = Buffer.from(sigHex, 'utf8');
+  const expectedBuf = Buffer.from(expectedHex, 'utf8');
+  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    if (!parsed?.email || !parsed?.exp || parsed.exp < Date.now()) return null;
+    return { email: parsed.email, expiresAt: parsed.exp };
+  } catch {
+    return null;
+  }
+}
+
 const ADMIN_EMAILS = new Set([
   'admin@patrik.ai',
   ...(process.env.ADMIN_EMAILS || '')
@@ -330,18 +451,17 @@ function loadStore() {
 loadStore();
 
 // Middleware авторизации
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-  const session = sessions.get(token);
+  const session = verifySessionToken(token);
   if (!session || session.expiresAt < Date.now()) {
-    if (session) {
-      sessions.delete(token);
-      saveStore();
-    }
     return res.status(401).json({ error: 'Пожалуйста, войдите или зарегистрируйте аккаунт' });
   }
-  const user = usersByEmail.get(session.email);
+  let user = usersByEmail.get(session.email);
+  if (!user) {
+    user = await loadUserFromPg(session.email);
+  }
   if (!user) {
     return res.status(401).json({ error: 'Пожалуйста, войдите или зарегистрируйте аккаунт' });
   }
@@ -369,7 +489,7 @@ app.get('/api/plans', (_req, res) => {
 });
 
 // Авторизация (строгий rate-limit от подбора пароля)
-app.post('/api/auth/login', rateLimit(15, 5 * 60 * 1000), (req, res) => {
+app.post('/api/auth/login', rateLimit(15, 5 * 60 * 1000), async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
     return res.status(400).json({ error: 'Введите корректный email и пароль' });
@@ -379,7 +499,10 @@ app.post('/api/auth/login', rateLimit(15, 5 * 60 * 1000), (req, res) => {
     return res.status(400).json({ error: 'Некорректный формат email' });
   }
 
-  const user = usersByEmail.get(normalized);
+  let user = usersByEmail.get(normalized);
+  if (!user) {
+    user = await loadUserFromPg(normalized);
+  }
   if (!user || !verifyPassword(password, user.passwordHash)) {
     return res.status(401).json({ error: 'Неверный email или пароль' });
   }
@@ -392,7 +515,7 @@ app.post('/api/auth/login', rateLimit(15, 5 * 60 * 1000), (req, res) => {
     user.role = 'admin';
   }
 
-  const token = crypto.randomBytes(32).toString('hex');
+  const token = createSessionToken(normalized);
   sessions.set(token, { email: normalized, expiresAt: Date.now() + SESSION_TTL_MS });
   saveStore();
 
@@ -415,7 +538,7 @@ app.post('/api/auth/register', rateLimit(10, 5 * 60 * 1000), async (req, res) =>
   if (password.length < 6 || password.length > 128) {
     return res.status(400).json({ error: 'Пароль должен быть от 6 до 128 символов' });
   }
-  if (usersByEmail.has(normalized)) {
+  if (usersByEmail.has(normalized) || (await loadUserFromPg(normalized))) {
     return res.status(409).json({ error: 'Аккаунт с таким email уже существует' });
   }
 
@@ -432,19 +555,19 @@ app.post('/api/auth/register', rateLimit(10, 5 * 60 * 1000), async (req, res) =>
   };
   usersByEmail.set(normalized, newUser);
 
-  if (pgAvailable) {
+  if (pgAvailable && pool) {
     try {
-      await pool.query('INSERT INTO users (email, password, name) VALUES ($1, $2, $3)', [
-        newUser.email,
-        newUser.passwordHash,
-        newUser.full_name,
-      ]);
+      const inserted = await pool.query(
+        'INSERT INTO users (email, password, name) VALUES ($1, $2, $3) RETURNING id',
+        [newUser.email, newUser.passwordHash, newUser.full_name]
+      );
+      if (inserted.rows[0]?.id) newUser.id = inserted.rows[0].id;
     } catch (e) {
       console.error(e);
     }
   }
 
-  const token = crypto.randomBytes(32).toString('hex');
+  const token = createSessionToken(normalized);
   sessions.set(token, { email: normalized, expiresAt: Date.now() + SESSION_TTL_MS });
   saveStore();
 
@@ -457,8 +580,11 @@ app.post('/api/auth/register', rateLimit(10, 5 * 60 * 1000), async (req, res) =>
 app.post('/api/auth/logout', (req, res) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-  sessions.delete(token);
-  saveStore();
+  if (token) {
+    revokedTokens.add(token);
+    sessions.delete(token);
+    saveStore();
+  }
   res.json({ ok: true });
 });
 
@@ -566,6 +692,10 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
 
     if (pgAvailable && pool) {
       try {
+        await pool.query(
+          'INSERT INTO subscriptions (user_id, plan_id, status, expires_at) VALUES ($1, $2, $3, $4)',
+          [u.id, plan.id, 'active', newExpiresAt]
+        );
         await pool.query(
           'INSERT INTO payments (user_id, plan_id, amount, method, status) VALUES ($1, $2, $3, $4, $5)',
           [u.id, plan.id, amount, amount === 0 ? 'free' : paymentMethod, amount === 0 ? 'Активировано' : 'Оплачено']
