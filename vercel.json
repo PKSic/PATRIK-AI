@@ -5,6 +5,14 @@
   "outputDirectory": "frontend/dist",
   "rewrites": [
     {
+      "source": "/api/plans",
+      "destination": "/api/plans.js"
+    },
+    {
+      "source": "/api/config",
+      "destination": "/api/config.js"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index.js"
     },

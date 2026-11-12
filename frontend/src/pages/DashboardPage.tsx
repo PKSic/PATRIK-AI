@@ -22,9 +22,12 @@ import {
   User,
   Mail,
   KeyRound,
+  Bot,
+  Sparkles,
 } from 'lucide-react';
 import { AdminPanel } from '../components/AdminPanel';
 import { PatrikLogo } from '../components/PatrikLogo';
+import { SUPPORT_TOPICS, SupportTopic } from '../constants';
 import {
   ApiKeyItem,
   PageName,
@@ -97,8 +100,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordNotice, setPasswordNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  // Поддержка: сообщения, поле ввода, автообновление
-  const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
+  // Поддержка: сообщения, поле ввода, автообновление (сохранение в кэш аккаунта)
+  const [supportMessages, setSupportMessages] = useState<SupportMessage[]>(() => {
+    try {
+      const cached = localStorage.getItem(`patrik_support_msgs_${user.id}`);
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [supportText, setSupportText] = useState('');
   const [sendingSupport, setSendingSupport] = useState(false);
   const [loadingSupport, setLoadingSupport] = useState(false);
@@ -107,9 +117,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   useEffect(() => {
     setProfileName(user.full_name || '');
     setProfileEmail(user.email || '');
+    // Восстанавливаем сохранённые сообщения для текущего пользователя
+    try {
+      const cached = localStorage.getItem(`patrik_support_msgs_${user.id}`);
+      if (cached) {
+        setSupportMessages(JSON.parse(cached));
+      }
+    } catch {}
   }, [user]);
 
-  // Загрузка сообщений пользователя
+  // Загрузка сообщений пользователя с сервера (привязка к аккаунту)
   const loadUserSupportMessages = async () => {
     setLoadingSupport(true);
     try {
@@ -118,12 +135,49 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       });
       if (res.ok) {
         const data = await res.json();
-        setSupportMessages(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : (data.messages || data.list || []);
+        setSupportMessages(list);
+        if (user?.id) {
+          localStorage.setItem(`patrik_support_msgs_${user.id}`, JSON.stringify(list));
+        }
       }
     } catch (e) {
       console.warn('Failed to load support messages:', e);
     } finally {
       setLoadingSupport(false);
+    }
+  };
+
+  // Выбор быстрой темы с мгновенным авто-ответом
+  const handleSelectTopic = async (topic: SupportTopic) => {
+    setSupportNotice(null);
+    try {
+      const res = await fetch('/api/support/topic', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          topicId: topic.id,
+          question: topic.userQuestion,
+          answer: topic.autoReply,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSupportMessages((prev) => {
+          const updated = [...prev, data.userMessage, data.botMessage];
+          if (user?.id) {
+            localStorage.setItem(`patrik_support_msgs_${user.id}`, JSON.stringify(updated));
+          }
+          return updated;
+        });
+        setSupportNotice('✓ Тема выбрана. Бот заботы мгновенно ответил в чате!');
+        setTimeout(() => setSupportNotice(null), 5000);
+      }
+    } catch (err) {
+      console.error('Failed to trigger support topic:', err);
     }
   };
 
@@ -229,7 +283,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       });
       const data = await res.json();
       if (res.ok) {
-        setSupportMessages((prev) => [...prev, data]);
+        const newMsg = data.message || data;
+        setSupportMessages((prev) => {
+          const updated = [...prev, newMsg];
+          if (user?.id) {
+            localStorage.setItem(`patrik_support_msgs_${user.id}`, JSON.stringify(updated));
+          }
+          return updated;
+        });
         setSupportText('');
         setSupportNotice('✓ Сообщение отправлено! Администратор уведомлен в Telegram-боте.');
         setTimeout(() => setSupportNotice(null), 5000);
@@ -1049,14 +1110,35 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               </div>
 
               {/* Info banner */}
-              <div className="p-3 rounded-xl bg-slate-100 dark:bg-[#070E24] border border-slate-200 dark:border-white/10 text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between">
+              <div className="p-3 rounded-xl bg-slate-100 dark:bg-[#070E24] border border-slate-200 dark:border-white/10 text-xs text-slate-600 dark:text-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
                   <Lock className="w-3.5 h-3.5 text-[#0297DE]" />
-                  Все сообщения шифруются ключом AES-256-GCM в базе данных.
+                  Все сообщения шифруются ключом AES-256-GCM и сохраняются в вашем профиле.
                 </span>
-                <span className="text-[11px] text-slate-400 hidden sm:inline">
-                  Telegram ID админа: 5103486897
+                <span className="text-[11px] text-slate-400">
+                  Telegram админа: 5103486897
                 </span>
+              </div>
+
+              {/* Быстрые темы для мгновенного авто-ответа */}
+              <div className="p-3.5 rounded-xl bg-gradient-to-r from-[#0297DE]/10 via-[#070E24] to-[#FC734D]/10 border border-[#0297DE]/25 space-y-2.5">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#FC734D]" />
+                  <span>Быстрые темы с мгновенным авто-ответом:</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {SUPPORT_TOPICS.map((topic) => (
+                    <button
+                      key={topic.id}
+                      type="button"
+                      onClick={() => handleSelectTopic(topic)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#0E1A3B] hover:bg-[#0297DE]/20 dark:hover:bg-[#132044] border border-slate-200 dark:border-white/10 hover:border-[#0297DE]/50 text-xs font-medium text-slate-800 dark:text-slate-200 hover:text-[#0297DE] transition-all cursor-pointer shadow-sm"
+                    >
+                      <span>{topic.icon}</span>
+                      <span>{topic.title}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Notice */}
@@ -1070,7 +1152,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               {/* Chat thread */}
               <div className="flex-1 space-y-3 overflow-y-auto max-h-[380px] my-2 pr-1 flex flex-col justify-end">
                 {supportMessages.length === 0 ? (
-                  <div className="text-center py-10 space-y-2">
+                  <div className="text-center py-8 space-y-2">
                     <div className="w-12 h-12 rounded-full bg-[#0297DE]/15 text-[#0297DE] flex items-center justify-center mx-auto">
                       <MessageSquare className="w-6 h-6" />
                     </div>
@@ -1078,8 +1160,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                       Здравствуйте, {user.full_name}!
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                      Напишите ваш вопрос ниже. Мы сразу получим его в Telegram и ответим вам в этом
-                      чате.
+                      Выберите одну из кнопок тем выше для мгновенного ответа бота или задайте свой
+                      вопрос в поле ввода ниже.
                     </p>
                   </div>
                 ) : (
@@ -1091,7 +1173,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                         className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
                       >
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mb-1 px-1">
-                          <span>{isUser ? 'Вы' : 'Поддержка PATRIK AI'}</span>
+                          {!isUser && <Bot className="w-3 h-3 text-[#FC734D]" />}
+                          <span>{isUser ? 'Вы' : m.userName || 'Поддержка PATRIK AI'}</span>
                           <span>•</span>
                           <span>
                             {m.createdAt
@@ -1103,7 +1186,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                           </span>
                         </div>
                         <div
-                          className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed shadow-sm ${
+                          className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed shadow-sm whitespace-pre-line ${
                             isUser
                               ? 'bg-[#0297DE] text-white rounded-br-none'
                               : 'bg-slate-100 dark:bg-[#132044] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 rounded-bl-none'

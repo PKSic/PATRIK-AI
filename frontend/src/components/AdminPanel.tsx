@@ -94,7 +94,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       if (res.ok) {
         const data = await res.json();
-        setChatMessages(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : (data.messages || data.list || []);
+        setChatMessages(list);
         // Обновляем бейдж непрочитанных у этого чата локально
         setChats((prev) =>
           prev.map((c) => (c.userId === userId ? { ...c, unreadCount: 0 } : c))
@@ -137,7 +138,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         body: JSON.stringify({ text: replyText.trim() }),
       });
       if (res.ok) {
-        const newMsg = await res.json();
+        const resData = await res.json();
+        const newMsg = resData.message || resData;
         setChatMessages((prev) => [...prev, newMsg]);
         setReplyText('');
         showNotice('Ответ отправлен пользователю и сохранён в зашифрованном виде!');

@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PLANS as DEFAULT_PLANS, siteConfig as DEFAULT_SITE_CONFIG } from './plans.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.VERCEL ? '/tmp' : path.join(__dirname, 'data');
@@ -222,88 +223,9 @@ function verifyPassword(pwd, storedHash) {
   return derived.length === keyBuf.length && crypto.timingSafeEqual(derived, keyBuf);
 }
 
-// Публичный каталог тарифов
-const PLANS = [
-  {
-    id: 1,
-    tier: 1,
-    slug: 'starter',
-    name: 'Starter',
-    description: 'Базовый доступ для знакомства с возможностями PATRIK AI.',
-    price_monthly: 0,
-    price_yearly: 0,
-    token_limit: 100000,
-    api_calls_limit: 0,
-    max_team_members: 1,
-    is_popular: false,
-    features: [
-      '50 запросов в сутки',
-      'Модель PATRIK Text 2.5',
-      'Контекст до 8K токенов',
-      'Доступ через браузер и телефон',
-      'История чатов за 7 дней',
-    ],
-  },
-  {
-    id: 2,
-    tier: 2,
-    slug: 'pro-creator',
-    name: 'Pro Creator',
-    description: 'Оптимально для студентов, разработчиков, дизайнеров и авторов.',
-    price_monthly: 990,
-    price_yearly: 792,
-    token_limit: 1000000,
-    api_calls_limit: 10000,
-    max_team_members: 1,
-    is_popular: true,
-    features: [
-      'Безлимитные запросы ко всем моделям',
-      'Приоритетный GPU-инференс (120ms)',
-      'Контекст до 128K токенов',
-      'Генерация кода, UI и 4K-картинок',
-      'Доступ к REST API (10K вызовов)',
-      'Поддержка 24/7 в личном кабинете',
-    ],
-  },
-  {
-    id: 3,
-    tier: 3,
-    slug: 'ultra-team',
-    name: 'Ultra Team',
-    description: 'Для команд, агентств и коммерческих проектов.',
-    price_monthly: 3490,
-    price_yearly: 2792,
-    token_limit: -1,
-    api_calls_limit: -1,
-    max_team_members: 5,
-    is_popular: false,
-    features: [
-      'Всё из тарифа Pro Creator',
-      'До 5 участников в одном аккаунте',
-      'Выделенный сервер без лимитов',
-      'Контекст до 1M токенов',
-      'Безлимитный API + SDK',
-      'Персональный менеджер и SLA 99.9%',
-    ],
-  },
-];
-
-let siteConfig = {
-  brandName: 'PATRIK AI',
-  heroBadge: 'PATRIK AI 2.5 — Мультимодальная нейросеть нового поколения',
-  heroTitle: 'Интеллект со скоростью вашей мысли.',
-  heroSubtitle:
-    'Генерируйте код, тексты, изображения и анализируйте данные в одном окне. Единая подписка вместо десятка разрозненных сервисов.',
-  stat1Value: '3x',
-  stat1Label: 'быстрее аналогичных моделей',
-  stat2Value: '99.9%',
-  stat2Label: 'доступность серверов',
-  stat3Value: '120K+',
-  stat3Label: 'активных подписчиков',
-  stat4Value: '2.4M',
-  stat4Label: 'запросов ежедневно',
-  supportEmail: 'support@patrik.ai',
-};
+// Публичный каталог тарифов и настройки сайта
+const PLANS = [...DEFAULT_PLANS];
+let siteConfig = { ...DEFAULT_SITE_CONFIG };
 
 const usersByEmail = new Map();
 const sessions = new Map(); // token -> { email, expiresAt }
@@ -667,15 +589,15 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-app.get('/api/health', (_req, res) => {
+app.get(['/api/health', '/health'], (_req, res) => {
   res.json({ ok: true, database: pgAvailable ? 'postgresql' : 'server-store' });
 });
 
-app.get('/api/config', (_req, res) => {
+app.get(['/api/config', '/config'], (_req, res) => {
   res.json(siteConfig);
 });
 
-app.get('/api/plans', (_req, res) => {
+app.get(['/api/plans', '/plans'], (_req, res) => {
   res.json(PLANS);
 });
 
@@ -1535,7 +1457,85 @@ app.get('/api/support/messages', requireAuth, async (req, res) => {
       text: decryptSupportMessage(m.encrypted_text, m.iv, m.auth_tag),
       createdAt: m.createdAt,
     }));
-  res.json({ messages: list });
+  res.json({ success: true, messages: list, list });
+});
+
+// Выбор темы с мгновенным авто-ответом и сохранением в историю диалога
+app.post('/api/support/topic', requireAuth, rateLimit(30, 60 * 1000), async (req, res) => {
+  const { topicId, question, answer } = req.body || {};
+  const cleanQ = sanitizeText(question, 500);
+  const cleanA = sanitizeText(answer, 2500);
+  if (!cleanQ || !cleanA) {
+    return res.status(400).json({ error: 'Некорректная тема авто-ответа' });
+  }
+
+  const u = req.user;
+  const now = new Date().toISOString();
+
+  // 1. Шифруем и сохраняем вопрос пользователя
+  const encQ = encryptSupportMessage(cleanQ);
+  const userMsgRecord = {
+    id: supportMessages.length + 1,
+    userId: u.id,
+    userEmail: u.email,
+    userName: u.full_name || 'Пользователь',
+    sender: 'user',
+    encrypted_text: encQ.encrypted_text,
+    iv: encQ.iv,
+    auth_tag: encQ.auth_tag,
+    is_read: true,
+    createdAt: now,
+  };
+  supportMessages.push(userMsgRecord);
+
+  // 2. Шифруем и сохраняем авто-ответ от службы заботы
+  const encA = encryptSupportMessage(cleanA);
+  const botMsgRecord = {
+    id: supportMessages.length + 1,
+    userId: u.id,
+    userEmail: u.email,
+    userName: 'Бот заботы PATRIK AI',
+    sender: 'admin',
+    encrypted_text: encA.encrypted_text,
+    iv: encA.iv,
+    auth_tag: encA.auth_tag,
+    is_read: true,
+    createdAt: new Date(Date.now() + 300).toISOString(),
+  };
+  supportMessages.push(botMsgRecord);
+  saveStore();
+
+  if (pgAvailable && pool) {
+    try {
+      await pool.query(
+        'INSERT INTO support_messages (user_id, sender, encrypted_text, iv, auth_tag, is_read) VALUES ($1, $2, $3, $4, $5, true), ($1, $6, $7, $8, $9, true)',
+        [u.id, 'user', encQ.encrypted_text, encQ.iv, encQ.auth_tag, 'admin', encA.encrypted_text, encA.iv, encA.auth_tag]
+      );
+    } catch (e) {
+      console.error('Ошибка записи авто-ответа в PostgreSQL:', e);
+    }
+  }
+
+  // Оповещаем администратора в Telegram о выбранной теме
+  notifyAdminInTelegram(u, `[Выбрана тема поддержки: ${topicId || 'Авто-ответ'}]\nВопрос: ${cleanQ}`);
+
+  res.json({
+    success: true,
+    userMessage: {
+      id: userMsgRecord.id,
+      sender: 'user',
+      userName: userMsgRecord.userName,
+      text: cleanQ,
+      createdAt: userMsgRecord.createdAt,
+    },
+    botMessage: {
+      id: botMsgRecord.id,
+      sender: 'admin',
+      userName: botMsgRecord.userName,
+      text: cleanA,
+      createdAt: botMsgRecord.createdAt,
+    },
+  });
 });
 
 // Отправка обращения пользователем в поддержку (AES-256-GCM шифрование + Telegram notification)

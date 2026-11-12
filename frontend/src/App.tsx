@@ -16,6 +16,7 @@ import {
   TransactionItem,
   UserInfo,
 } from './types';
+import { DEFAULT_PLANS, DEFAULT_SITE_CONFIG } from './constants';
 
 export const App: React.FC = () => {
   // Сессия хранится в localStorage браузера; восстанавливаем сразу при открытии и обновлении страницы
@@ -54,23 +55,8 @@ export const App: React.FC = () => {
   const [theme, setTheme] = useState<ThemeMode>(() => {
     return (localStorage.getItem('patrik_theme') as ThemeMode) || 'dark';
   });
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [siteConfig, setSiteConfig] = useState<SiteConfig>({
-    brandName: 'PATRIK AI',
-    heroBadge: 'PATRIK AI 2.5 — Мультимодальная нейросеть нового поколения',
-    heroTitle: 'Интеллект со скоростью вашей мысли.',
-    heroSubtitle:
-      'Генерируйте код, тексты, изображения и анализируйте данные в одном окне. Единая подписка вместо десятка разрозненных сервисов.',
-    stat1Value: '3x',
-    stat1Label: 'быстрее аналогичных моделей',
-    stat2Value: '99.9%',
-    stat2Label: 'доступность серверов',
-    stat3Value: '120K+',
-    stat3Label: 'активных подписчиков',
-    stat4Value: '2.4M',
-    stat4Label: 'запросов ежедневно',
-    supportEmail: 'support@patrik.ai',
-  });
+  const [plans, setPlans] = useState<Plan[]>(DEFAULT_PLANS);
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
 
