@@ -305,6 +305,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
+        if (data.token) {
+          onUserUpdated?.(user, data.token);
+        }
       } else {
         setPasswordNotice({ type: 'err', text: data.error || 'Ошибка смены пароля' });
       }

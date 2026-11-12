@@ -193,6 +193,9 @@ export const App: React.FC = () => {
     if (newToken) {
       setToken(newToken);
       localStorage.setItem('patrik_token', newToken);
+      if (updatedUser?.email) {
+        localStorage.setItem(`patrik_backup_${updatedUser.email.toLowerCase().trim()}`, newToken);
+      }
     }
   };
 
@@ -203,6 +206,11 @@ export const App: React.FC = () => {
     fullName?: string
   ) => {
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const backupToken =
+        localStorage.getItem(`patrik_backup_${normalizedEmail}`) ||
+        localStorage.getItem('patrik_token') ||
+        undefined;
       const url = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
       const res = await fetch(url, {
         method: 'POST',
@@ -210,7 +218,12 @@ export const App: React.FC = () => {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ email, password, full_name: fullName }),
+        body: JSON.stringify({
+          email: normalizedEmail,
+          password,
+          full_name: fullName,
+          backupToken,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -218,6 +231,14 @@ export const App: React.FC = () => {
       }
       localStorage.setItem('patrik_token', data.token);
       localStorage.setItem('patrik_user', JSON.stringify(data.user));
+      localStorage.setItem(`patrik_backup_${normalizedEmail}`, data.token);
+      try {
+        const saved = JSON.parse(localStorage.getItem('patrik_known_accounts') || '[]');
+        if (Array.isArray(saved) && !saved.includes(normalizedEmail)) {
+          saved.unshift(normalizedEmail);
+          localStorage.setItem('patrik_known_accounts', JSON.stringify(saved.slice(0, 5)));
+        }
+      } catch {}
       setToken(data.token);
       setUser(data.user);
       await fetchDashboard(data.token);
