@@ -48,8 +48,15 @@ app.use((_req, res, next) => {
   next();
 });
 
-// Rate Limiter (защита от брутфорса и спама)
+// Rate Limiter (защита от брутфорса и спама + очистка устаревших записей)
 const rateBuckets = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of rateBuckets.entries()) {
+    if (now > v.resetAt) rateBuckets.delete(k);
+  }
+}, 5 * 60 * 1000).unref();
+
 function rateLimit(maxRequests, windowMs) {
   return (req, res, next) => {
     const ip = req.ip || req.socket?.remoteAddress || 'unknown';
@@ -438,6 +445,9 @@ app.get('/api/dashboard', requireAuth, (req, res) => {
 app.post('/api/subscribe', requireAuth, async (req, res) => {
   const { planSlug, billingCycle = 'monthly', paymentMethod = 'card', cardDetails } = req.body || {};
 
+  if (typeof planSlug !== 'string' || !planSlug.trim()) {
+    return res.status(400).json({ error: 'Некорректный идентификатор тарифа' });
+  }
   if (!['monthly', 'yearly'].includes(billingCycle)) {
     return res.status(400).json({ error: 'Некорректный период подписки' });
   }
@@ -467,8 +477,16 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
   const amount = billingCycle === 'yearly' ? plan.price_yearly * 12 : plan.price_monthly;
   if (amount > 0 && paymentMethod === 'card') {
     const num = String(cardDetails?.number || '').replace(/\D/g, '');
+    const exp = String(cardDetails?.expiry || '').trim();
+    const cvc = String(cardDetails?.cvc || '').replace(/\D/g, '');
     if (num.length !== 16) {
       return res.status(400).json({ error: 'Введите корректный 16-значный номер карты' });
+    }
+    if (exp && !/^\d{2}\/\d{2}$/.test(exp)) {
+      return res.status(400).json({ error: 'Некорректный срок карты (ММ/ГГ)' });
+    }
+    if (cvc && cvc.length !== 3) {
+      return res.status(400).json({ error: 'Некорректный CVC код (3 цифры)' });
     }
     // Номер карты и CVC не сохраняются на сервере
   }
@@ -574,7 +592,14 @@ app.post('/api/keys', requireAuth, (req, res) => {
 
 app.delete('/api/keys/:id', requireAuth, (req, res) => {
   const keyId = String(req.params.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(keyId)) {
+    return res.status(400).json({ error: 'Некорректный ID ключа' });
+  }
+  const before = req.user.apiKeys.length;
   req.user.apiKeys = req.user.apiKeys.filter((k) => k.id !== keyId);
+  if (req.user.apiKeys.length === before) {
+    return res.status(404).json({ error: 'Ключ не найден' });
+  }
   saveStore();
   res.json({
     apiKeys: req.user.apiKeys.map(({ keyHash, ...safe }) => safe),
