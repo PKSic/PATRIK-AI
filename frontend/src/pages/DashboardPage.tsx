@@ -263,7 +263,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     if (activeTab === 'support') {
       loadUserSupportMessages(false);
     }
-  }, [activeTab, token]);
+  }, [activeTab]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();

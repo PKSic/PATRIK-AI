@@ -1022,7 +1022,6 @@ app.get('/api/dashboard', requireAuth, (req, res) => {
     subscription: u.subscription,
     transactions: u.transactions,
     apiKeys: u.apiKeys.map(({ keyHash, ...safe }) => safe),
-    token: createSessionToken(u),
   });
 });
 

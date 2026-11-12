@@ -169,14 +169,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     if (subTab === 'support') {
       loadChats(false);
     }
-  }, [subTab, token]);
+  }, [subTab]);
 
   // Загрузка сообщений один раз при выборе диалога (без авто-интервалов)
   useEffect(() => {
     if (subTab === 'support' && selectedUserId) {
       loadMessages(selectedUserId, false);
     }
-  }, [subTab, selectedUserId, token]);
+  }, [subTab, selectedUserId]);
 
   const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();

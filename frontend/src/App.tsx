@@ -139,11 +139,9 @@ export const App: React.FC = () => {
       }
       if (res.ok) {
         const data = await res.json();
-        setUser(data.user);
-        localStorage.setItem('patrik_user', JSON.stringify(data.user));
-        if (data.token) {
-          setToken(data.token);
-          localStorage.setItem('patrik_token', data.token);
+        if (data.user) {
+          setUser(data.user);
+          localStorage.setItem('patrik_user', JSON.stringify(data.user));
         }
         setSubscription(data.subscription || null);
         if (data.subscription) {
@@ -159,11 +157,13 @@ export const App: React.FC = () => {
     }
   };
 
+  // Синхронизация данных профиля только один раз при старте приложения (без циклов)
   useEffect(() => {
-    if (token) {
-      fetchDashboard(token);
+    const initialToken = localStorage.getItem('patrik_token');
+    if (initialToken) {
+      fetchDashboard(initialToken);
     }
-  }, [token]);
+  }, []);
 
   const cycleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : prev === 'light' ? 'system' : 'dark'));
