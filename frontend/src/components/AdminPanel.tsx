@@ -164,19 +164,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }, [chatMessages.length, subTab]);
 
+  // Загрузка чатов один раз при открытии вкладки поддержки (без авто-интервалов)
   useEffect(() => {
     if (subTab === 'support') {
       loadChats(false);
-      const interval = setInterval(() => loadChats(false), 8000);
-      return () => clearInterval(interval);
     }
   }, [subTab, token]);
 
+  // Загрузка сообщений один раз при выборе диалога (без авто-интервалов)
   useEffect(() => {
     if (subTab === 'support' && selectedUserId) {
       loadMessages(selectedUserId, false);
-      const interval = setInterval(() => loadMessages(selectedUserId, false), 5000);
-      return () => clearInterval(interval);
     }
   }, [subTab, selectedUserId, token]);
 

@@ -255,11 +255,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     }
   };
 
+  // Загружаем сообщения один раз при открытии вкладки поддержки (без авто-интервалов)
   useEffect(() => {
     if (activeTab === 'support') {
       loadUserSupportMessages(false);
-      const interval = setInterval(() => loadUserSupportMessages(false), 5000);
-      return () => clearInterval(interval);
     }
   }, [activeTab, token]);
 
@@ -644,9 +643,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {transactions.slice(0, 5).map((tx) => (
+                      {transactions.slice(0, 5).map((tx, idx) => (
                         <div
-                          key={tx.tx_code}
+                          key={`${tx.tx_code || 'tx'}_${idx}`}
                           className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-[#132044]/75 text-[13px]"
                         >
                           <div className="flex items-center gap-2 min-w-0">
@@ -987,9 +986,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 <p className="text-sm text-slate-500">Транзакций пока нет.</p>
               ) : (
                 <div className="space-y-2.5">
-                  {transactions.map((tx) => (
+                  {transactions.map((tx, idx) => (
                     <div
-                      key={tx.tx_code}
+                      key={`${tx.tx_code || 'tx'}_${idx}`}
                       className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 px-4 py-3 rounded-xl bg-slate-100 dark:bg-[#132044]/70 text-sm"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
