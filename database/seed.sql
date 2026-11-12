@@ -6,7 +6,7 @@ INSERT INTO plans (name, price_month, price_year, description) VALUES
 ('Ultra Team', 3490, 2792, 'Для команд, агентств и коммерческих проектов.');
 
 INSERT INTO users (email, password, name) VALUES
-('student@college.ru', 'demo1234', 'Студент Колледжа');
+('student@college.ru', 'CHANGE_ME_HASHED_PASSWORD', 'Студент Колледжа');
 
 INSERT INTO subscriptions (user_id, plan_id, status, expires_at) VALUES
 (1, 2, 'active', '2026-12-12');

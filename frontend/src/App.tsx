@@ -253,7 +253,7 @@ export const App: React.FC = () => {
   const handleDeleteKey = async (id: string) => {
     if (!token) return;
     try {
-      const res = await fetch(`/api/keys/${id}`, {
+      const res = await fetch(`/api/keys/${encodeURIComponent(id)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

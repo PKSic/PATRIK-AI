@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import pg from 'pg';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -13,8 +14,12 @@ const STORE_FILE = path.join(DATA_DIR, 'patrik-store.json');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Отключаем заголовок X-Powered-By
+// Доверяем первому прокси (Vercel/Nginx) для корректного req.ip в rate limiter
+app.set('trust proxy', 1);
+
+// Отключаем заголовок X-Powered-By и добавляем защитные HTTP-заголовки
 app.disable('x-powered-by');
+app.use(helmet());
 
 // Ограничиваем CORS локальным фронтендом, доменом Vercel или ALLOWED_ORIGIN из .env
 const ALLOWED_ORIGINS = new Set([
@@ -82,16 +87,21 @@ function rateLimit(maxRequests, windowMs) {
 
 app.use('/api', rateLimit(120, 60 * 1000));
 
-const pool = new pg.Pool({
-  connectionString:
-    process.env.DATABASE_URL ||
-    'postgresql://patrik:patrik_secret_password@localhost:5432/patrik_ai',
-  connectionTimeoutMillis: 1500,
-});
+const pool = process.env.DATABASE_URL
+  ? new pg.Pool({
+      connectionString: process.env.DATABASE_URL,
+      connectionTimeoutMillis: 1500,
+    })
+  : null;
 
 let pgAvailable = false;
 
 async function checkPostgres() {
+  if (!pool) {
+    pgAvailable = false;
+    console.log('ℹ️ DATABASE_URL not set — running with secure server store');
+    return;
+  }
   try {
     await pool.query('SELECT 1');
     pgAvailable = true;
@@ -224,30 +234,34 @@ const sessions = new Map(); // token -> { email, expiresAt }
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 function seedDefaultUsers() {
-  const adminPass = process.env.ADMIN_PASSWORD || 'admin1234';
-  const demoPass = process.env.DEMO_PASSWORD || 'demo1234';
+  const adminPass = process.env.ADMIN_PASSWORD;
+  const demoPass = process.env.DEMO_PASSWORD;
 
-  usersByEmail.set('admin@patrik.ai', {
-    id: 1,
-    email: 'admin@patrik.ai',
-    passwordHash: hashPassword(adminPass),
-    full_name: 'Администратор PATRIK AI',
-    role: 'admin',
-    subscription: null,
-    transactions: [],
-    apiKeys: [],
-  });
+  if (adminPass) {
+    usersByEmail.set('admin@patrik.ai', {
+      id: 1,
+      email: 'admin@patrik.ai',
+      passwordHash: hashPassword(adminPass),
+      full_name: 'Администратор PATRIK AI',
+      role: 'admin',
+      subscription: null,
+      transactions: [],
+      apiKeys: [],
+    });
+  }
 
-  usersByEmail.set('student@college.ru', {
-    id: 2,
-    email: 'student@college.ru',
-    passwordHash: hashPassword(demoPass),
-    full_name: 'Студент Колледжа',
-    role: 'user',
-    subscription: null,
-    transactions: [],
-    apiKeys: [],
-  });
+  if (demoPass) {
+    usersByEmail.set('student@college.ru', {
+      id: 2,
+      email: 'student@college.ru',
+      passwordHash: hashPassword(demoPass),
+      full_name: 'Студент Колледжа',
+      role: 'user',
+      subscription: null,
+      transactions: [],
+      apiKeys: [],
+    });
+  }
 }
 
 function saveStore() {
@@ -446,6 +460,9 @@ app.get('/api/dashboard', requireAuth, (req, res) => {
   });
 });
 
+// Блокировка параллельных запросов на оплату для защиты от race condition
+const inFlightSubscriptions = new Set();
+
 // Оформление / продление / апгрейд подписки
 app.post('/api/subscribe', requireAuth, async (req, res) => {
   const { planSlug, billingCycle = 'monthly', paymentMethod = 'card', cardDetails } = req.body || {};
@@ -464,88 +481,96 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
   if (!plan) return res.status(404).json({ error: 'Тариф не найден' });
 
   const u = req.user;
+  if (inFlightSubscriptions.has(u.email)) {
+    return res.status(409).json({ error: 'Операция уже выполняется. Подождите завершения.' });
+  }
+  inFlightSubscriptions.add(u.email);
 
-  if (u.subscription && u.subscription.status === 'active') {
-    const currentPlan = PLANS.find((p) => p.slug === u.subscription.plan_slug);
-    if (currentPlan) {
-      if (plan.tier < currentPlan.tier) {
-        return res.status(400).json({
-          error: `Нельзя купить тариф ниже вашего текущего («${currentPlan.name}»).`,
-        });
+  try {
+    if (u.subscription && u.subscription.status === 'active') {
+      const currentPlan = PLANS.find((p) => p.slug === u.subscription.plan_slug);
+      if (currentPlan) {
+        if (plan.tier < currentPlan.tier) {
+          return res.status(400).json({
+            error: `Нельзя купить тариф ниже вашего текущего («${currentPlan.name}»).`,
+          });
+        }
+        if (plan.tier === currentPlan.tier && plan.price_monthly === 0) {
+          return res.status(400).json({ error: `Тариф «${currentPlan.name}» уже активен у вас.` });
+        }
       }
-      if (plan.tier === currentPlan.tier && plan.price_monthly === 0) {
-        return res.status(400).json({ error: `Тариф «${currentPlan.name}» уже активен у вас.` });
+    }
+
+    const amount = billingCycle === 'yearly' ? plan.price_yearly * 12 : plan.price_monthly;
+    if (amount > 0 && paymentMethod === 'card') {
+      const num = String(cardDetails?.number || '').replace(/\D/g, '');
+      const exp = String(cardDetails?.expiry || '').trim();
+      const cvc = String(cardDetails?.cvc || '').replace(/\D/g, '');
+      if (num.length !== 16) {
+        return res.status(400).json({ error: 'Введите корректный 16-значный номер карты' });
+      }
+      if (exp && !/^\d{2}\/\d{2}$/.test(exp)) {
+        return res.status(400).json({ error: 'Некорректный срок карты (ММ/ГГ)' });
+      }
+      if (cvc && cvc.length !== 3) {
+        return res.status(400).json({ error: 'Некорректный CVC код (3 цифры)' });
+      }
+      // Номер карты и CVC не сохраняются на сервере
+    }
+
+    const txCode = `#TX-${crypto.randomInt(1000, 9999)}`;
+
+    const isRenewal = u.subscription && u.subscription.plan_slug === plan.slug;
+    const baseDate = isRenewal && u.subscription.expires_at
+      ? new Date(u.subscription.expires_at)
+      : new Date();
+    if (billingCycle === 'yearly') {
+      baseDate.setFullYear(baseDate.getFullYear() + 1);
+    } else {
+      baseDate.setMonth(baseDate.getMonth() + 1);
+    }
+    const newExpiresAt = baseDate.toISOString().slice(0, 10);
+
+    u.subscription = {
+      plan_slug: plan.slug,
+      plan_name: plan.name,
+      tier: plan.tier,
+      billing_cycle: billingCycle,
+      status: 'active',
+      tokens_used: isRenewal ? u.subscription.tokens_used : 0,
+      token_limit: plan.token_limit,
+      expires_at: newExpiresAt,
+    };
+
+    u.transactions.unshift({
+      tx_code: txCode,
+      plan_name: `${plan.name} (${billingCycle === 'yearly' ? '1 год' : '1 мес'})`,
+      amount,
+      payment_method: amount === 0 ? 'free' : paymentMethod,
+      status: amount === 0 ? 'Активировано' : 'Оплачено',
+    });
+    saveStore();
+
+    if (pgAvailable && pool) {
+      try {
+        await pool.query(
+          'INSERT INTO payments (user_id, plan_id, amount, method, status) VALUES ($1, $2, $3, $4, $5)',
+          [u.id, plan.id, amount, amount === 0 ? 'free' : paymentMethod, amount === 0 ? 'Активировано' : 'Оплачено']
+        );
+      } catch (e) {
+        console.error(e);
       }
     }
+
+    res.json({
+      success: true,
+      tx_code: txCode,
+      subscription: u.subscription,
+      transactions: u.transactions,
+    });
+  } finally {
+    inFlightSubscriptions.delete(u.email);
   }
-
-  const amount = billingCycle === 'yearly' ? plan.price_yearly * 12 : plan.price_monthly;
-  if (amount > 0 && paymentMethod === 'card') {
-    const num = String(cardDetails?.number || '').replace(/\D/g, '');
-    const exp = String(cardDetails?.expiry || '').trim();
-    const cvc = String(cardDetails?.cvc || '').replace(/\D/g, '');
-    if (num.length !== 16) {
-      return res.status(400).json({ error: 'Введите корректный 16-значный номер карты' });
-    }
-    if (exp && !/^\d{2}\/\d{2}$/.test(exp)) {
-      return res.status(400).json({ error: 'Некорректный срок карты (ММ/ГГ)' });
-    }
-    if (cvc && cvc.length !== 3) {
-      return res.status(400).json({ error: 'Некорректный CVC код (3 цифры)' });
-    }
-    // Номер карты и CVC не сохраняются на сервере
-  }
-
-  const txCode = `#TX-${crypto.randomInt(1000, 9999)}`;
-
-  const isRenewal = u.subscription && u.subscription.plan_slug === plan.slug;
-  const baseDate = isRenewal && u.subscription.expires_at
-    ? new Date(u.subscription.expires_at)
-    : new Date();
-  if (billingCycle === 'yearly') {
-    baseDate.setFullYear(baseDate.getFullYear() + 1);
-  } else {
-    baseDate.setMonth(baseDate.getMonth() + 1);
-  }
-  const newExpiresAt = baseDate.toISOString().slice(0, 10);
-
-  u.subscription = {
-    plan_slug: plan.slug,
-    plan_name: plan.name,
-    tier: plan.tier,
-    billing_cycle: billingCycle,
-    status: 'active',
-    tokens_used: isRenewal ? u.subscription.tokens_used : 0,
-    token_limit: plan.token_limit,
-    expires_at: newExpiresAt,
-  };
-
-  u.transactions.unshift({
-    tx_code: txCode,
-    plan_name: `${plan.name} (${billingCycle === 'yearly' ? '1 год' : '1 мес'})`,
-    amount,
-    payment_method: amount === 0 ? 'free' : paymentMethod,
-    status: amount === 0 ? 'Активировано' : 'Оплачено',
-  });
-  saveStore();
-
-  if (pgAvailable) {
-    try {
-      await pool.query(
-        'INSERT INTO payments (user_id, plan_id, amount, method, status) VALUES ($1, $2, $3, $4, $5)',
-        [u.id, plan.id, amount, amount === 0 ? 'free' : paymentMethod, amount === 0 ? 'Активировано' : 'Оплачено']
-      );
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  res.json({
-    success: true,
-    tx_code: txCode,
-    subscription: u.subscription,
-    transactions: u.transactions,
-  });
 });
 
 // Создание нового API-ключа
