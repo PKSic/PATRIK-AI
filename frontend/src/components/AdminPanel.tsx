@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Save,
   Users,
@@ -55,6 +55,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [notice, setNotice] = useState<string | null>(null);
 
   // Поддержка: состояние чатов и активной переписки
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [chats, setChats] = useState<SupportChat[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [chatMessages, setChatMessages] = useState<SupportMessage[]>([]);
@@ -104,9 +105,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  // Загрузка сообщений выбранного пользователя с умным слиянием
-  const loadMessages = async (userId: number) => {
-    setLoadingMessages(true);
+  // Загрузка сообщений выбранного пользователя с защитой от моргания
+  const loadMessages = async (userId: number, isManual = false) => {
+    if (isManual) setLoadingMessages(true);
     try {
       const res = await fetch(`/api/admin/support/messages/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -115,7 +116,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         const data = await res.json();
         const incoming = Array.isArray(data) ? data : (data.messages || data.list || []);
         if (Array.isArray(incoming) && incoming.length > 0) {
-          setChatMessages((prev) => mergeSupportMessages(prev, incoming));
+          setChatMessages((prev) => {
+            const merged = mergeSupportMessages(prev, incoming);
+            if (
+              merged.length === prev.length &&
+              merged.every((m, i) => m.id === prev[i]?.id && m.text === prev[i]?.text)
+            ) {
+              return prev;
+            }
+            return merged;
+          });
         }
         // Обновляем бейдж непрочитанных у этого чата локально
         setChats((prev) =>
@@ -125,9 +135,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } catch (e) {
       console.warn('Failed to load chat messages:', e);
     } finally {
-      setLoadingMessages(false);
+      if (isManual) setLoadingMessages(false);
     }
   };
+
+  useEffect(() => {
+    if (subTab === 'support' && chatMessages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages.length, subTab]);
 
   useEffect(() => {
     if (subTab === 'support') {
@@ -139,8 +155,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   useEffect(() => {
     if (subTab === 'support' && selectedUserId) {
-      loadMessages(selectedUserId);
-      const interval = setInterval(() => loadMessages(selectedUserId), 4000);
+      loadMessages(selectedUserId, false);
+      const interval = setInterval(() => loadMessages(selectedUserId, false), 4000);
       return () => clearInterval(interval);
     }
   }, [subTab, selectedUserId, token]);
@@ -615,7 +631,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <div className="text-xs text-slate-500">{selectedChat.userEmail}</div>
                     </div>
                     <button
-                      onClick={() => loadMessages(selectedUserId)}
+                      onClick={() => loadMessages(selectedUserId, true)}
                       title="Обновить переписку"
                       className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 cursor-pointer"
                     >
@@ -624,7 +640,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
 
                   {/* Messages list */}
-                  <div className="my-4 space-y-3 overflow-y-auto max-h-[380px] pr-2 flex-1 flex flex-col justify-end">
+                  <div className="my-4 space-y-3 overflow-y-auto min-h-[260px] max-h-[420px] pr-2 flex-1 scroll-smooth">
                     {chatMessages.length === 0 ? (
                       <p className="text-xs text-slate-400 text-center py-8">
                         В этом диалоге ещё нет сообщений.
@@ -663,6 +679,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         );
                       })
                     )}
+                    <div ref={messagesEndRef} />
                   </div>
 
                   {/* Reply form */}

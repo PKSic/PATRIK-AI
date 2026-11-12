@@ -1459,7 +1459,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, (_req, res) => {
 // Получение истории сообщений текущего пользователя
 app.get('/api/support/messages', requireAuth, async (req, res) => {
   const u = req.user;
-  let list = [];
+  let pgList = [];
 
   if (pgAvailable && pool) {
     try {
@@ -1468,7 +1468,7 @@ app.get('/api/support/messages', requireAuth, async (req, res) => {
         [u.id]
       );
       if (qRes.rows.length > 0) {
-        list = qRes.rows.map((r) => ({
+        pgList = qRes.rows.map((r) => ({
           id: r.id,
           sender: r.sender,
           userName: r.sender === 'user' ? (u.full_name || 'Пользователь') : 'Поддержка PATRIK AI',
@@ -1481,18 +1481,29 @@ app.get('/api/support/messages', requireAuth, async (req, res) => {
     }
   }
 
-  if (list.length === 0) {
-    list = supportMessages
-      .filter((m) => m.userId === u.id || (m.userEmail && m.userEmail.toLowerCase() === u.email.toLowerCase()))
-      .map((m) => ({
-        id: m.id,
-        sender: m.sender,
-        userName: m.userName,
-        text: decryptSupportMessage(m.encrypted_text, m.iv, m.auth_tag),
-        createdAt: m.createdAt,
-      }));
+  const storeList = supportMessages
+    .filter((m) => String(m.userId) === String(u.id) || (m.userEmail && m.userEmail.toLowerCase() === u.email.toLowerCase()))
+    .map((m) => ({
+      id: m.id,
+      sender: m.sender,
+      userName: m.userName || (m.sender === 'user' ? (u.full_name || 'Пользователь') : 'Поддержка PATRIK AI'),
+      text: decryptSupportMessage(m.encrypted_text, m.iv, m.auth_tag),
+      createdAt: m.createdAt,
+    }));
+
+  const map = new Map();
+  for (const m of pgList) {
+    const key = m.id ? String(m.id) : `${m.sender}_${m.text}_${m.createdAt}`;
+    map.set(key, m);
+  }
+  for (const m of storeList) {
+    const key = m.id ? String(m.id) : `${m.sender}_${m.text}_${m.createdAt}`;
+    if (!map.has(key)) {
+      map.set(key, m);
+    }
   }
 
+  const list = Array.from(map.values());
   // Всегда сортируем в строгом хронологическом порядке
   list.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
   res.json({ success: true, messages: list, list });

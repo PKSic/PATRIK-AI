@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   LayoutDashboard,
   Key,
@@ -121,10 +121,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [passwordNotice, setPasswordNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   // Поддержка: сообщения, поле ввода, автообновление (сохранение в кэш аккаунта)
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [supportMessages, setSupportMessages] = useState<SupportMessage[]>(() => {
     try {
-      const cached = localStorage.getItem(`patrik_support_msgs_${user.id}`);
-      return cached ? JSON.parse(cached) : [];
+      const byEmail = user?.email ? localStorage.getItem(`patrik_support_msgs_${user.email.toLowerCase()}`) : null;
+      if (byEmail) return JSON.parse(byEmail);
+      const byId = user?.id ? localStorage.getItem(`patrik_support_msgs_${user.id}`) : null;
+      if (byId) return JSON.parse(byId);
+      return [];
     } catch {
       return [];
     }
@@ -137,18 +141,30 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   useEffect(() => {
     setProfileName(user.full_name || '');
     setProfileEmail(user.email || '');
-    // Восстанавливаем сохранённые сообщения для текущего пользователя
+    // Восстанавливаем сохранённые сообщения для текущего пользователя по email и id
     try {
-      const cached = localStorage.getItem(`patrik_support_msgs_${user.id}`);
-      if (cached) {
-        setSupportMessages(JSON.parse(cached));
+      const byEmail = user?.email ? localStorage.getItem(`patrik_support_msgs_${user.email.toLowerCase()}`) : null;
+      if (byEmail) {
+        setSupportMessages(JSON.parse(byEmail));
+      } else if (user?.id) {
+        const byId = localStorage.getItem(`patrik_support_msgs_${user.id}`);
+        if (byId) {
+          setSupportMessages(JSON.parse(byId));
+        }
       }
     } catch {}
   }, [user]);
 
-  // Загрузка сообщений пользователя с сервера (привязка к аккаунту с защитой от затирания)
-  const loadUserSupportMessages = async () => {
-    setLoadingSupport(true);
+  // Плавная прокрутка к последнему сообщению при добавлении
+  useEffect(() => {
+    if (activeTab === 'support' && supportMessages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [supportMessages.length, activeTab]);
+
+  // Загрузка сообщений пользователя с сервера (привязка к аккаунту с защитой от затирания и моргания)
+  const loadUserSupportMessages = async (isManual = false) => {
+    if (isManual) setLoadingSupport(true);
     try {
       const res = await fetch('/api/support/messages', {
         headers: { Authorization: `Bearer ${token}` },
@@ -165,8 +181,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         if (Array.isArray(incoming) && incoming.length > 0) {
           setSupportMessages((prev) => {
             const merged = mergeSupportMessages(prev, incoming);
+            // Если сообщения не изменились, не вызываем перерисовку DOM во избежание моргания
+            if (
+              merged.length === prev.length &&
+              merged.every((m, i) => m.id === prev[i]?.id && m.text === prev[i]?.text)
+            ) {
+              return prev;
+            }
             if (user?.id) {
               localStorage.setItem(`patrik_support_msgs_${user.id}`, JSON.stringify(merged));
+            }
+            if (user?.email) {
+              localStorage.setItem(`patrik_support_msgs_${user.email.toLowerCase()}`, JSON.stringify(merged));
             }
             return merged;
           });
@@ -175,7 +201,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     } catch (e) {
       console.warn('Failed to load support messages:', e);
     } finally {
-      setLoadingSupport(false);
+      if (isManual) setLoadingSupport(false);
     }
   };
 
@@ -231,8 +257,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
   useEffect(() => {
     if (activeTab === 'support') {
-      loadUserSupportMessages();
-      const interval = setInterval(loadUserSupportMessages, 5000);
+      loadUserSupportMessages(false);
+      const interval = setInterval(() => loadUserSupportMessages(false), 5000);
       return () => clearInterval(interval);
     }
   }, [activeTab, token]);
@@ -1173,7 +1199,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     Поддержка онлайн
                   </span>
                   <button
-                    onClick={loadUserSupportMessages}
+                    onClick={() => loadUserSupportMessages(true)}
                     title="Обновить переписку"
                     className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 cursor-pointer"
                   >
@@ -1222,9 +1248,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               )}
 
               {/* Chat thread */}
-              <div className="flex-1 space-y-3 overflow-y-auto max-h-[380px] my-2 pr-1 flex flex-col justify-end">
+              <div className="flex-1 space-y-3 overflow-y-auto min-h-[260px] max-h-[420px] my-2 pr-2 scroll-smooth">
                 {supportMessages.length === 0 ? (
-                  <div className="text-center py-8 space-y-2">
+                  <div className="h-full flex flex-col items-center justify-center text-center py-10 space-y-2">
                     <div className="w-12 h-12 rounded-full bg-[#0297DE]/15 text-[#0297DE] flex items-center justify-center mx-auto">
                       <MessageSquare className="w-6 h-6" />
                     </div>
@@ -1271,6 +1297,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     );
                   })
                 )}
+                <div ref={messagesEndRef} />
               </div>
 
               {/* Send message form */}
