@@ -1122,14 +1122,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     Служба заботы PATRIK AI
                   </h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Задайте любой вопрос или опишите сложность — администратор получит мгновенное
-                    уведомление в Telegram и ответит здесь.
+                    Задайте любой вопрос или опишите сложность — мы ответим вам в этом чате.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center gap-1.5">
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Telegram-бот онлайн
+                    Поддержка онлайн
                   </span>
                   <button
                     onClick={loadUserSupportMessages}
@@ -1141,19 +1140,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 </div>
               </div>
 
-              {/* Info banner */}
-              <div className="p-3 rounded-xl bg-slate-100 dark:bg-[#070E24] border border-slate-200 dark:border-white/10 text-xs text-slate-600 dark:text-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <span className="flex items-center gap-2">
-                  <Lock className="w-3.5 h-3.5 text-[#0297DE]" />
-                  Все сообщения шифруются ключом AES-256-GCM и сохраняются в вашем профиле.
-                </span>
-                <span className="text-[11px] text-slate-400">
-                  Telegram админа: 5103486897
-                </span>
-              </div>
-
               {/* Быстрые темы для мгновенного авто-ответа */}
-              <div className="p-3.5 rounded-xl bg-gradient-to-r from-[#0297DE]/10 via-[#070E24] to-[#FC734D]/10 border border-[#0297DE]/25 space-y-2.5">
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-[#0297DE]/8 via-white to-[#FC734D]/8 dark:from-[#0297DE]/15 dark:via-[#0E1A3B] dark:to-[#FC734D]/15 border border-[#0297DE]/20 dark:border-white/10 space-y-2.5 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-[#FC734D]" />
                   <span>Быстрые темы с мгновенным авто-ответом:</span>
@@ -1164,7 +1152,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                       key={topic.id}
                       type="button"
                       onClick={() => handleSelectTopic(topic)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#0E1A3B] hover:bg-[#0297DE]/20 dark:hover:bg-[#132044] border border-slate-200 dark:border-white/10 hover:border-[#0297DE]/50 text-xs font-medium text-slate-800 dark:text-slate-200 hover:text-[#0297DE] transition-all cursor-pointer shadow-sm"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#132044] hover:bg-[#0297DE]/10 dark:hover:bg-[#0297DE]/20 border border-slate-200 dark:border-white/10 hover:border-[#0297DE]/40 text-xs font-medium text-slate-800 dark:text-slate-200 hover:text-[#0297DE] transition-all cursor-pointer shadow-sm"
                     >
                       <span>{topic.icon}</span>
                       <span>{topic.title}</span>
