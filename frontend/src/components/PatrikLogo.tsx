@@ -12,7 +12,7 @@ export const PatrikLogo: React.FC<PatrikLogoProps> = ({ size = 36, withText = tr
         style={{ width: size, height: size }}
         className="relative flex items-center justify-center rounded-[10px] bg-[#070E24] p-[4px] border border-transparent"
       >
-        {/* Градиентная рамка как в Figma */}
+        {/* Фирменная градиентная рамка логотипа */}
         <div
           className="absolute inset-0 rounded-[10px] p-[1.5px] pointer-events-none"
           style={{

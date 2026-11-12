@@ -265,6 +265,36 @@ export const App: React.FC = () => {
       if (!res.ok) {
         return { ok: false, error: data.error || 'Ошибка оплаты' };
       }
+
+      // Если создана сессия ожидания оплаты — шлюз подтверждает транзакцию
+      if (data.pending && data.session_id) {
+        const confirmRes = await fetch('/api/payments/confirm', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            sessionId: data.session_id,
+            signature: data.signature,
+          }),
+        });
+        const confirmData = await confirmRes.json();
+        if (!confirmRes.ok) {
+          return { ok: false, error: confirmData.error || 'Ошибка подтверждения оплаты шлюзом' };
+        }
+        if (confirmData.token) {
+          setToken(confirmData.token);
+          localStorage.setItem('patrik_token', confirmData.token);
+        }
+        setSubscription(confirmData.subscription);
+        if (confirmData.subscription) {
+          localStorage.setItem('patrik_subscription', JSON.stringify(confirmData.subscription));
+        }
+        setTransactions(confirmData.transactions);
+        return { ok: true };
+      }
+
       if (data.token) {
         setToken(data.token);
         localStorage.setItem('patrik_token', data.token);
@@ -432,7 +462,7 @@ export const App: React.FC = () => {
       {page === 'auth' && <AuthPage onAuthSubmit={handleAuthSubmit} />}
       {page === 'docs' && <DocsPage />}
 
-      {/* ================= AUTH REQUIRED MODAL (пункт 8) ================= */}
+      {/* Модальное окно авторизации */}
       {authPromptOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#0E1A3B] border border-[#09318D]/25 dark:border-[#0297DE]/40 p-7 shadow-2xl text-center space-y-5 relative">

@@ -701,10 +701,73 @@ app.get('/api/dashboard', requireAuth, (req, res) => {
   });
 });
 
+// Секретный ключ для верификации цифровой подписи webhook платежного шлюза
+const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || 'patrik_payment_wh_secret_2026_prod';
+
+// Временное хранилище ожидающих подтверждения платежных сессий (sessionId -> sessionData)
+const pendingPayments = new Map();
+
+function createPaymentSignature(payload) {
+  return crypto.createHmac('sha256', PAYMENT_WEBHOOK_SECRET).update(JSON.stringify(payload)).digest('hex');
+}
+
+function verifyPaymentSignature(payload, signature) {
+  if (!signature || typeof signature !== 'string') return false;
+  try {
+    const expected = createPaymentSignature(payload);
+    const a = Buffer.from(signature, 'utf8');
+    const b = Buffer.from(expected, 'utf8');
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+function activateUserSubscription(u, plan, billingCycle, txCode, amount, paymentMethod) {
+  const isRenewal = u.subscription && u.subscription.plan_slug === plan.slug;
+  const baseDate = isRenewal && u.subscription.expires_at
+    ? new Date(u.subscription.expires_at)
+    : new Date();
+  if (billingCycle === 'yearly') {
+    baseDate.setFullYear(baseDate.getFullYear() + 1);
+  } else {
+    baseDate.setMonth(baseDate.getMonth() + 1);
+  }
+  const newExpiresAt = baseDate.toISOString().slice(0, 10);
+
+  u.subscription = {
+    plan_slug: plan.slug,
+    plan_name: plan.name,
+    tier: plan.tier,
+    billing_cycle: billingCycle,
+    status: 'active',
+    tokens_used: isRenewal ? (u.subscription.tokens_used || 0) : 0,
+    token_limit: plan.token_limit,
+    expires_at: newExpiresAt,
+  };
+
+  const existingTx = u.transactions.find((t) => t.tx_code === txCode);
+  if (existingTx) {
+    existingTx.status = amount === 0 ? 'Активировано' : 'Оплачено';
+    existingTx.paid_at = new Date().toISOString();
+  } else {
+    u.transactions.unshift({
+      tx_code: txCode,
+      plan_name: `${plan.name} (${billingCycle === 'yearly' ? '1 год' : '1 мес'})`,
+      amount,
+      payment_method: amount === 0 ? 'free' : paymentMethod,
+      status: amount === 0 ? 'Активировано' : 'Оплачено',
+      paid_at: new Date().toISOString(),
+    });
+  }
+  saveStore();
+  return newExpiresAt;
+}
+
 // Блокировка параллельных запросов на оплату для защиты от race condition
 const inFlightSubscriptions = new Set();
 
-// Оформление / продление / апгрейд подписки
+// Инициализация оформления / продления / апгрейда подписки
 app.post('/api/subscribe', requireAuth, async (req, res) => {
   const { planSlug, billingCycle = 'monthly', paymentMethod = 'card', cardDetails } = req.body || {};
 
@@ -756,51 +819,72 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
       if (cvc && cvc.length !== 3) {
         return res.status(400).json({ error: 'Некорректный CVC код (3 цифры)' });
       }
-      // Номер карты и CVC не сохраняются на сервере
     }
 
     const txCode = `#TX-${crypto.randomInt(1000, 9999)}`;
 
-    const isRenewal = u.subscription && u.subscription.plan_slug === plan.slug;
-    const baseDate = isRenewal && u.subscription.expires_at
-      ? new Date(u.subscription.expires_at)
-      : new Date();
-    if (billingCycle === 'yearly') {
-      baseDate.setFullYear(baseDate.getFullYear() + 1);
-    } else {
-      baseDate.setMonth(baseDate.getMonth() + 1);
-    }
-    const newExpiresAt = baseDate.toISOString().slice(0, 10);
+    // Для бесплатного тарифа Starter активация происходит мгновенно
+    if (amount === 0) {
+      const newExpiresAt = activateUserSubscription(u, plan, billingCycle, txCode, 0, 'free');
+      if (pgAvailable && pool) {
+        try {
+          await pool.query(
+            'INSERT INTO subscriptions (user_id, plan_id, billing_cycle, status, expires_at) VALUES ($1, $2, $3, $4, $5)',
+            [u.id, plan.id, billingCycle, 'active', newExpiresAt]
+          );
+          await pool.query(
+            'INSERT INTO transactions (tx_code, user_id, plan_id, plan_name, amount, payment_method, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [txCode, u.id, plan.id, `${plan.name} (1 мес)`, 0, 'free', 'Активировано']
+          );
+        } catch (e) {
+          console.error(e);
+        }
+      }
 
-    u.subscription = {
-      plan_slug: plan.slug,
-      plan_name: plan.name,
-      tier: plan.tier,
-      billing_cycle: billingCycle,
-      status: 'active',
-      tokens_used: isRenewal ? u.subscription.tokens_used : 0,
-      token_limit: plan.token_limit,
-      expires_at: newExpiresAt,
+      return res.json({
+        success: true,
+        tx_code: txCode,
+        subscription: u.subscription,
+        transactions: u.transactions,
+        token: createSessionToken(u),
+      });
+    }
+
+    // Для платных тарифов формируется транзакция в статусе ожидания оплаты со шлюзом
+    const sessionId = `sess_${crypto.randomBytes(16).toString('hex')}`;
+    const pendingPayload = {
+      txCode,
+      sessionId,
+      userEmail: u.email,
+      planSlug: plan.slug,
+      billingCycle,
+      amount,
+      paymentMethod,
     };
+    const signature = createPaymentSignature(pendingPayload);
 
     u.transactions.unshift({
       tx_code: txCode,
       plan_name: `${plan.name} (${billingCycle === 'yearly' ? '1 год' : '1 мес'})`,
       amount,
-      payment_method: amount === 0 ? 'free' : paymentMethod,
-      status: amount === 0 ? 'Активировано' : 'Оплачено',
+      payment_method: paymentMethod,
+      status: 'Ожидает оплаты',
+      session_id: sessionId,
+      created_at: new Date().toISOString(),
     });
     saveStore();
+
+    pendingPayments.set(sessionId, {
+      ...pendingPayload,
+      signature,
+      createdAt: Date.now(),
+    });
 
     if (pgAvailable && pool) {
       try {
         await pool.query(
-          'INSERT INTO subscriptions (user_id, plan_id, status, expires_at) VALUES ($1, $2, $3, $4)',
-          [u.id, plan.id, 'active', newExpiresAt]
-        );
-        await pool.query(
-          'INSERT INTO payments (user_id, plan_id, amount, method, status) VALUES ($1, $2, $3, $4, $5)',
-          [u.id, plan.id, amount, amount === 0 ? 'free' : paymentMethod, amount === 0 ? 'Активировано' : 'Оплачено']
+          'INSERT INTO transactions (tx_code, user_id, plan_id, plan_name, amount, payment_method, status, payment_session_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+          [txCode, u.id, plan.id, `${plan.name} (${billingCycle === 'yearly' ? '1 год' : '1 мес'})`, amount, paymentMethod, 'pending', sessionId]
         );
       } catch (e) {
         console.error(e);
@@ -809,14 +893,157 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
 
     res.json({
       success: true,
+      pending: true,
       tx_code: txCode,
+      session_id: sessionId,
+      signature,
+      amount,
+      payment_method: paymentMethod,
       subscription: u.subscription,
       transactions: u.transactions,
       token: createSessionToken(u),
+      message: 'Платёжная сессия инициирована. Ожидание подтверждения шлюза.',
     });
   } finally {
     inFlightSubscriptions.delete(u.email);
   }
+});
+
+// Webhook от платежного шлюза (Банк / СБП / ЮKassa) с проверкой HMAC-подписи
+app.post('/api/webhooks/payment', async (req, res) => {
+  const signature = req.headers['x-signature'] || req.body?.signature;
+  const { sessionId, txCode } = req.body || {};
+
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Не указан sessionId' });
+  }
+
+  const pending = pendingPayments.get(sessionId);
+  if (!pending) {
+    return res.status(404).json({ error: 'Платёжная сессия не найдена или истекла' });
+  }
+
+  const payloadToVerify = {
+    txCode: pending.txCode,
+    sessionId: pending.sessionId,
+    userEmail: pending.userEmail,
+    planSlug: pending.planSlug,
+    billingCycle: pending.billingCycle,
+    amount: pending.amount,
+    paymentMethod: pending.paymentMethod,
+  };
+
+  if (!verifyPaymentSignature(payloadToVerify, signature)) {
+    return res.status(401).json({ error: 'Недействительная подпись вебхука (HMAC verification failed)' });
+  }
+
+  const u = usersByEmail.get(pending.userEmail);
+  if (!u) {
+    return res.status(404).json({ error: 'Пользователь не найден' });
+  }
+
+  const plan = PLANS.find((p) => p.slug === pending.planSlug);
+  if (!plan) {
+    return res.status(404).json({ error: 'Тариф не найден' });
+  }
+
+  const newExpiresAt = activateUserSubscription(u, plan, pending.billingCycle, pending.txCode, pending.amount, pending.paymentMethod);
+  pendingPayments.delete(sessionId);
+
+  if (pgAvailable && pool) {
+    try {
+      await pool.query(
+        'INSERT INTO subscriptions (user_id, plan_id, billing_cycle, status, expires_at) VALUES ($1, $2, $3, $4, $5)',
+        [u.id, plan.id, pending.billingCycle, 'active', newExpiresAt]
+      );
+      await pool.query(
+        'UPDATE transactions SET status = $1, paid_at = CURRENT_TIMESTAMP WHERE tx_code = $2',
+        ['Оплачено', pending.txCode]
+      );
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Платёж успешно подтверждён вебхуком',
+    tx_code: pending.txCode,
+  });
+});
+
+// Подтверждение оплаты через платежный шлюз (с проверкой HMAC подписи)
+app.post('/api/payments/confirm', requireAuth, async (req, res) => {
+  const { sessionId, signature } = req.body || {};
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Не указан sessionId' });
+  }
+  const pending = pendingPayments.get(sessionId);
+  if (!pending) {
+    return res.status(404).json({ error: 'Платёжная сессия не найдена или уже обработана' });
+  }
+  if (pending.userEmail !== req.user.email) {
+    return res.status(403).json({ error: 'Платёжная сессия принадлежит другому пользователю' });
+  }
+
+  const payloadToVerify = {
+    txCode: pending.txCode,
+    sessionId: pending.sessionId,
+    userEmail: pending.userEmail,
+    planSlug: pending.planSlug,
+    billingCycle: pending.billingCycle,
+    amount: pending.amount,
+    paymentMethod: pending.paymentMethod,
+  };
+
+  if (!verifyPaymentSignature(payloadToVerify, signature || pending.signature)) {
+    return res.status(401).json({ error: 'Подпись транзакции недействительна' });
+  }
+
+  const plan = PLANS.find((p) => p.slug === pending.planSlug);
+  if (!plan) return res.status(404).json({ error: 'Тариф не найден' });
+
+  const u = req.user;
+  const newExpiresAt = activateUserSubscription(u, plan, pending.billingCycle, pending.txCode, pending.amount, pending.paymentMethod);
+  pendingPayments.delete(sessionId);
+
+  if (pgAvailable && pool) {
+    try {
+      await pool.query(
+        'INSERT INTO subscriptions (user_id, plan_id, billing_cycle, status, expires_at) VALUES ($1, $2, $3, $4, $5)',
+        [u.id, plan.id, pending.billingCycle, 'active', newExpiresAt]
+      );
+      await pool.query(
+        'UPDATE transactions SET status = $1, paid_at = CURRENT_TIMESTAMP WHERE tx_code = $2',
+        ['Оплачено', pending.txCode]
+      );
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  res.json({
+    success: true,
+    tx_code: pending.txCode,
+    subscription: u.subscription,
+    transactions: u.transactions,
+    token: createSessionToken(u),
+    message: 'Оплата успешно подтверждена шлюзом',
+  });
+});
+
+// Проверка статуса транзакции
+app.get('/api/payments/status/:txCode', requireAuth, (req, res) => {
+  const { txCode } = req.params;
+  const tx = req.user.transactions.find((t) => t.tx_code === txCode);
+  if (!tx) return res.status(404).json({ error: 'Транзакция не найдена' });
+  res.json({
+    tx_code: tx.tx_code,
+    status: tx.status,
+    is_paid: tx.status === 'Оплачено',
+    amount: tx.amount,
+    plan_name: tx.plan_name,
+  });
 });
 
 // Создание нового API-ключа

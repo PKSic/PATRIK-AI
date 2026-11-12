@@ -1,32 +1,61 @@
-# PATRIK AI — Сервис подписок на нейросеть
+# PATRIK AI — Сервис подписок и агрегации API нейросетей
 
-Проект разработан в `E:\магазин подписок ии`.
+Полнофункциональный веб-сервис для управления подписками на модели искусственного интеллекта (GPT-4o, Claude 3.5 Sonnet, Gemini Pro, FLUX) с личным кабинетом, генерацией API-ключей, историей транзакций и интеграцией платежей.
 
-## Структура проекта
-- `database/schema.sql` — полная схема PostgreSQL (`users`, `plans`, `subscriptions`, `transactions`, `api_keys`, `usage_logs`)
-- `database/seed.sql` — начальные тарифы и демо-данные
-- `docker-compose.yml` — запуск PostgreSQL 16 в Docker
-- `backend/` — REST API на Node.js + Express + `pg` (с автоматическим fallback-режимом, если PostgreSQL не запущен локально)
-- `frontend/` — клиентская часть на React + TypeScript + Vite + Tailwind CSS
+## Стек технологий
 
-## Запуск проекта
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS 4, Lucide React
+- **Backend**: Node.js, Express, `pg` (PostgreSQL Client), Helmet, Rate Limiter, Crypto
+- **База данных**: PostgreSQL 16 (с автоматическим failover-хранилищем `patrik-store.json`)
+- **Безопасность**: Хеширование паролей алгоритмом `scrypt`, HMAC/AES-256-GCM сессии, защита от race conditions (`inFlightSubscriptions`), Rate Limiting, защита от XSS/CSRF/Clickjacking
 
-### 1. База данных PostgreSQL (опционально)
+## Архитектура базы данных
+
+Схема базы данных представлена в `database/schema.sql` и состоит из 6 взаимосвязанных таблиц с внешними ключами и каскадным удалением:
+
+1. **`users`** — аккаунты пользователей, email, хеши паролей (`scrypt`), роли (`user`, `admin`).
+2. **`plans`** — тарифные планы (`Starter`, `Pro Creator`, `Ultra Team`), стоимость, лимиты токенов, список преимуществ.
+3. **`subscriptions`** — текущие активные подписки пользователей, расчёт срока действия, использованные токены.
+4. **`transactions`** (представление `payments`) — история платежей с поддержкой статусов (`pending`, `Оплачено`, `Активировано`, `Ошибка`), методов оплаты (карта, СБП) и идентификаторов платёжных сессий.
+5. **`api_keys`** — персональные API-ключи пользователей с безопасным хранением хешей, префиксами и индивидуальными квотами.
+6. **`usage_logs`** — журнал запросов к моделям, статистика потребления токенов и списания квот.
+
+## Платёжная архитектура и Webhook
+
+Оплата тарифов реализована с соблюдением двухэтапной модели электронных платежей:
+1. Создание платёжной сессии (`POST /api/subscribe`): сервер проверяет параметры, блокирует параллельные транзакции пользователя (`inFlightSubscriptions`), генерирует номер заказа `#TX-XXXX` со статусом `pending` и формирует платёжный токен.
+2. Подтверждение платежа через шлюз/webhook (`POST /api/webhooks/payment`): платёжный провайдер отправляет уведомление с подписью HMAC-SHA256 (`X-Signature`). Сервер проверяет подлинность подписи секретным ключом `PAYMENT_WEBHOOK_SECRET`, переводит транзакцию в статус `Оплачено` и активирует подписку.
+3. Проверка статуса клиентом (`GET /api/payments/status/:txCode`): фронтенд опрашивает статус транзакции до подтверждения.
+
+## Инструкция по запуску
+
+### 1. Запуск базы данных (PostgreSQL)
 ```bash
 docker compose up -d
 ```
+Или инициализация через `psql`:
+```bash
+psql -U postgres -d patrik_ai -f database/schema.sql
+psql -U postgres -d patrik_ai -f database/seed.sql
+```
 
-### 2. Бэкенд
+### 2. Запуск серверной части (Backend)
 ```bash
 cd backend
 npm install
 npm start
 ```
+Сервер запустится на порту `3001` (`http://localhost:3001`).
 
-### 3. Фронтенд
+### 3. Запуск клиентской части (Frontend)
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-Сайт будет доступен по адресу `http://localhost:5173`.
+Интерфейс доступен по адресу `http://localhost:5173`.
+
+## Демонстрационные учётные записи
+
+- **Администратор**: `admin@patrik.ai` (управление тарифами, пользователями и системными настройками)
+- **Пользователь**: `student@college.ru` (активная подписка Pro Creator, выпущенный API-ключ)

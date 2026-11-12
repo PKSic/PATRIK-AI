@@ -76,11 +76,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [payCycle, setPayCycle] = useState<'monthly' | 'yearly'>(selectedCycle || 'monthly');
   const [payMethod, setPayMethod] = useState<'card' | 'sbp'>('card');
 
-  // Модальное окно СБП QR (появляется только после нажатия "Оплатить")
+  // Модальное окно подтверждения оплаты через СБП
   const [showSbpModal, setShowSbpModal] = useState(false);
   const [checkingSbp, setCheckingSbp] = useState(false);
 
-  // Поля карты — пустые по умолчанию, пример только в placeholder
+  // Данные банковской карты для оформления
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
@@ -88,14 +88,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [paying, setPaying] = useState(false);
   const [payMsg, setPayMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  // Модалка создания API-ключа
+  // Модальное окно генерации API-ключа
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyLimit, setNewKeyLimit] = useState('');
   const [creatingKey, setCreatingKey] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
 
-  // Модалка показа нового ключа 1 раз (как на скрине 3)
+  // Однократное отображение сгенерированного секретного ключа
   const [createdFullKey, setCreatedFullKey] = useState<string | null>(null);
   const [copiedFlag, setCopiedFlag] = useState<string | null>(null);
 
@@ -519,7 +519,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           {/* ================= TAB: API KEYS ================= */}
           {activeTab === 'keys' && (
             <div className="space-y-6">
-              {/* Token Balance Banner (пункт 7) */}
+              {/* Баланс токенов пользователя */}
               <div className="rounded-2xl bg-white/90 dark:bg-[#0E1A3B]/85 border border-[#0297DE]/35 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 backdrop-blur-md">
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -545,7 +545,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 </button>
               </div>
 
-              {/* Keys Table (как на скрине 4) */}
+              {/* Таблица выпущенных API-ключей */}
               <div className="rounded-2xl bg-white/90 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 overflow-hidden backdrop-blur-md">
                 {apiKeys.length === 0 ? (
                   <div className="p-10 text-center space-y-2">
@@ -707,7 +707,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         </main>
       </div>
 
-      {/* ================= MODAL 3: ОПЛАТА ПО СБП (QR-КОД В СТИЛЕ PATRIK AI) ================= */}
+      {/* ================= MODAL: ОПЛАТА ПО СБП ================= */}
       {showSbpModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
           <div
@@ -774,7 +774,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         </div>
       )}
 
-      {/* ================= MODAL 1: НОВЫЙ API-КЛЮЧ (пункт 6) ================= */}
+      {/* ================= MODAL: НОВЫЙ API-КЛЮЧ ================= */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#0E1A3B] border border-slate-200 dark:border-white/15 p-6 shadow-2xl space-y-5">
@@ -847,7 +847,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         </div>
       )}
 
-      {/* ================= MODAL 2: СОХРАНИТЕ КЛЮЧ (Скрин 3) ================= */}
+      {/* ================= MODAL: СОХРАНЕНИЕ API-КЛЮЧА ================= */}
       {createdFullKey && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-2xl bg-[#141414] border border-white/15 p-6 shadow-2xl space-y-5 text-white">

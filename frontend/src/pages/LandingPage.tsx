@@ -132,7 +132,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
           </div>
 
-          {/* 3 Showcase Cards Row (как на фото и в Figma) */}
+          {/* Информационные карточки возможностей платформы */}
           <div className="mt-8 w-full grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
             {/* Card 1: Реальные карточки моделей из библиотеки */}
             <div className="p-5 rounded-2xl bg-white/95 dark:bg-[#0E1A3B]/90 border border-[#09318D]/20 dark:border-[#0297DE]/35 backdrop-blur-md shadow-sm flex flex-col justify-between">
@@ -192,7 +192,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
             </div>
 
-            {/* Card 2 (Центральная карточка: нежно-розовая в светлой теме как на фото, оранжево-розовая в тёмной) */}
+            {/* Card 2: График производительности */}
             <div className="p-5 rounded-2xl border border-[#09318D]/15 dark:border-white/25 text-white flex flex-col justify-between bg-gradient-to-br from-[#F59ACC] to-[#e479b6] dark:from-[#FC734D]/92 dark:to-[#F43F5E]/88 shadow-md">
               <div className="text-sm font-semibold text-[#09318D] dark:text-white">
                 Скорость инференса • 120 tok/s

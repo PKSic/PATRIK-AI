@@ -57,7 +57,7 @@ export const LightBeams: React.FC<LightBeamsProps> = ({ className = '' }) => {
 
         // Интерполяция RGB:
         // Тёмная тема: Electric Blue (2, 151, 222) -> Оранжевый (252, 115, 77)
-        // Светлая тема (цвета с фото): Глубокий синий #09318D (9, 49, 141) -> Нежно-розовый #F59ACC (245, 154, 204)
+        // Светлая тема: Глубокий синий #09318D (9, 49, 141) -> Нежно-розовый #F59ACC (245, 154, 204)
         const r = isDark
           ? Math.round(2 + (252 - 2) * orangeMix)
           : Math.round(9 + (245 - 9) * orangeMix);
@@ -88,7 +88,7 @@ export const LightBeams: React.FC<LightBeamsProps> = ({ className = '' }) => {
           grad.addColorStop(0.65, `rgba(${r}, ${g}, ${b}, ${(baseAlpha * 0.28).toFixed(3)})`);
           grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
         } else {
-          // Светлая тема: яркие насыщенные цвета с фото (Глубокий синий #09318D и Нежно-розовый #F59ACC)
+          // Светлая тема: фирменные акцентные цвета (Глубокий синий #09318D и Нежно-розовый #F59ACC)
           grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(baseAlpha * 0.95).toFixed(3)})`);
           grad.addColorStop(0.25, `rgba(${r}, ${g}, ${b}, ${baseAlpha.toFixed(3)})`);
           grad.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, ${(baseAlpha * 0.38).toFixed(3)})`);
