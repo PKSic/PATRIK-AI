@@ -186,6 +186,15 @@ export const App: React.FC = () => {
     navigateTo('dashboard');
   };
 
+  const handleUserUpdated = (updatedUser: UserInfo, newToken?: string) => {
+    setUser(updatedUser);
+    localStorage.setItem('patrik_user', JSON.stringify(updatedUser));
+    if (newToken) {
+      setToken(newToken);
+      localStorage.setItem('patrik_token', newToken);
+    }
+  };
+
   const handleAuthSubmit = async (
     mode: 'login' | 'register',
     email: string,
@@ -460,6 +469,7 @@ export const App: React.FC = () => {
           onCreateKey={handleCreateKey}
           onDeleteKey={handleDeleteKey}
           onLogout={handleLogout}
+          onUserUpdated={handleUserUpdated}
         />
       )}
       {page === 'auth' && <AuthPage onAuthSubmit={handleAuthSubmit} />}

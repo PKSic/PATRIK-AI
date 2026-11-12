@@ -79,3 +79,20 @@ export interface AdminUserItem {
   transactions_count: number;
   keys_count: number;
 }
+
+export interface SupportMessage {
+  id: number;
+  sender: 'user' | 'admin';
+  userName?: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface SupportChat {
+  userId: number;
+  userEmail: string;
+  userName: string;
+  unreadCount: number;
+  lastMessage: string;
+  lastMessageAt: string;
+}

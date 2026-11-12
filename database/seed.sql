@@ -49,3 +49,10 @@ FROM users u
 JOIN api_keys k ON k.user_id = u.id
 WHERE u.email = 'student@college.ru'
 LIMIT 1;
+
+-- Демо сообщение в службу поддержки
+INSERT INTO support_messages (user_id, sender, encrypted_text, iv, auth_tag, is_read)
+SELECT u.id, 'user', '7f8a9b2c3d4e5f', '11223344556677889900aabb', 'aabbccddeeff11223344556677889900', false
+FROM users u
+WHERE u.email = 'student@college.ru'
+LIMIT 1;

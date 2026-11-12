@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Key,
@@ -16,6 +16,12 @@ import {
   ShieldCheck,
   QrCode,
   Loader2,
+  MessageSquare,
+  Send,
+  RefreshCw,
+  User,
+  Mail,
+  KeyRound,
 } from 'lucide-react';
 import { AdminPanel } from '../components/AdminPanel';
 import { PatrikLogo } from '../components/PatrikLogo';
@@ -25,6 +31,7 @@ import {
   Plan,
   SiteConfig,
   SubscriptionInfo,
+  SupportMessage,
   TransactionItem,
   UserInfo,
 } from '../types';
@@ -51,6 +58,7 @@ interface DashboardPageProps {
   onCreateKey: (name: string, tokenLimit: string) => Promise<{ fullKey?: string; error?: string }>;
   onDeleteKey: (id: string) => Promise<void>;
   onLogout: () => void;
+  onUserUpdated?: (user: UserInfo, token?: string) => void;
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({
@@ -70,11 +78,170 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onCreateKey,
   onDeleteKey,
   onLogout,
+  onUserUpdated,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'keys' | 'history' | 'settings' | 'admin'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'keys' | 'history' | 'settings' | 'support' | 'admin'>('overview');
   const [payPlan, setPayPlan] = useState(selectedPlanSlug || 'pro-creator');
   const [payCycle, setPayCycle] = useState<'monthly' | 'yearly'>(selectedCycle || 'monthly');
   const [payMethod, setPayMethod] = useState<'card' | 'sbp'>('card');
+
+  // Настройки профиля: имя, email, пароль
+  const [profileName, setProfileName] = useState(user.full_name || '');
+  const [profileEmail, setProfileEmail] = useState(user.email || '');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileNotice, setProfileNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordNotice, setPasswordNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  // Поддержка: сообщения, поле ввода, автообновление
+  const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
+  const [supportText, setSupportText] = useState('');
+  const [sendingSupport, setSendingSupport] = useState(false);
+  const [loadingSupport, setLoadingSupport] = useState(false);
+  const [supportNotice, setSupportNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    setProfileName(user.full_name || '');
+    setProfileEmail(user.email || '');
+  }, [user]);
+
+  // Загрузка сообщений пользователя
+  const loadUserSupportMessages = async () => {
+    setLoadingSupport(true);
+    try {
+      const res = await fetch('/api/support/messages', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSupportMessages(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      console.warn('Failed to load support messages:', e);
+    } finally {
+      setLoadingSupport(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'support') {
+      loadUserSupportMessages();
+      const interval = setInterval(loadUserSupportMessages, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, token]);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profileName.trim() || !profileEmail.trim() || savingProfile) return;
+    setSavingProfile(true);
+    setProfileNotice(null);
+    try {
+      const res = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          full_name: profileName.trim(),
+          email: profileEmail.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setProfileNotice({ type: 'ok', text: 'Профиль успешно сохранён!' });
+        onUserUpdated?.(data.user, data.token);
+      } else {
+        setProfileNotice({ type: 'err', text: data.error || 'Ошибка сохранения профиля' });
+      }
+    } catch (err: any) {
+      setProfileNotice({ type: 'err', text: err?.message || 'Сетевая ошибка' });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (savingPassword) return;
+    setPasswordNotice(null);
+
+    if (!currentPassword) {
+      setPasswordNotice({ type: 'err', text: 'Введите текущий пароль' });
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordNotice({ type: 'err', text: 'Новый пароль должен содержать минимум 6 символов' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordNotice({ type: 'err', text: 'Новые пароли не совпадают' });
+      return;
+    }
+
+    setSavingPassword(true);
+    try {
+      const res = await fetch('/api/user/password', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPasswordNotice({ type: 'ok', text: 'Пароль успешно обновлён!' });
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        setPasswordNotice({ type: 'err', text: data.error || 'Ошибка смены пароля' });
+      }
+    } catch (err: any) {
+      setPasswordNotice({ type: 'err', text: err?.message || 'Сетевая ошибка' });
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleSendSupportMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supportText.trim() || sendingSupport) return;
+    setSendingSupport(true);
+    setSupportNotice(null);
+    try {
+      const res = await fetch('/api/support/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ text: supportText.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSupportMessages((prev) => [...prev, data]);
+        setSupportText('');
+        setSupportNotice('✓ Сообщение отправлено! Администратор уведомлен в Telegram-боте.');
+        setTimeout(() => setSupportNotice(null), 5000);
+      } else {
+        setSupportNotice(data.error || 'Ошибка отправки сообщения');
+      }
+    } catch (err: any) {
+      setSupportNotice(err?.message || 'Сетевая ошибка');
+    } finally {
+      setSendingSupport(false);
+    }
+  };
 
   // Модальное окно подтверждения оплаты через СБП
   const [showSbpModal, setShowSbpModal] = useState(false);
@@ -226,6 +393,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               { id: 'keys', label: 'API Ключи', icon: <Key className="w-4 h-4" /> },
               { id: 'history', label: 'История платежей', icon: <CreditCard className="w-4 h-4" /> },
               { id: 'settings', label: 'Настройки профиля', icon: <Settings className="w-4 h-4" /> },
+              { id: 'support', label: 'Поддержка', icon: <MessageSquare className="w-4 h-4" /> },
               ...(user.role === 'admin'
                 ? [{ id: 'admin', label: 'Админ-панель', icon: <ShieldCheck className="w-4 h-4" /> }]
                 : []),
@@ -680,18 +848,293 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           )}
 
           {activeTab === 'settings' && (
-            <div className="rounded-2xl bg-white/90 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 p-6 space-y-4">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Настройки профиля</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <div className="text-slate-500 dark:text-slate-400 mb-1">Имя</div>
-                  <div className="font-semibold text-slate-900 dark:text-white">{user.full_name}</div>
+            <div className="space-y-6">
+              {/* Профиль: Основные данные */}
+              <div className="rounded-2xl bg-white/90 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 p-6 md:p-7 space-y-6 backdrop-blur-md">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 pb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+                      <User className="w-5 h-5 text-[#0297DE]" />
+                      Данные профиля
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Здесь вы можете изменить свой никнейм и контактную электронную почту.
+                    </p>
+                  </div>
+                  <span className="px-3 py-1 rounded-full text-xs font-mono bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
+                    ID #{user.id}
+                  </span>
                 </div>
+
+                {profileNotice && (
+                  <div
+                    className={`p-3.5 rounded-xl text-xs font-medium flex items-center gap-2.5 ${
+                      profileNotice.type === 'ok'
+                        ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                        : 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
+                    }`}
+                  >
+                    {profileNotice.type === 'ok' ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                    )}
+                    <span>{profileNotice.text}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleSaveProfile} className="space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-slate-400" />
+                        Имя / Никнейм
+                      </label>
+                      <input
+                        type="text"
+                        value={profileName}
+                        onChange={(e) => setProfileName(e.target.value)}
+                        placeholder="Ваше имя или ник"
+                        className="w-full px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-[#070E24] border border-slate-300 dark:border-white/15 text-sm text-slate-900 dark:text-white outline-none focus:border-[#0297DE]"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-slate-400" />
+                        Электронная почта (Email)
+                      </label>
+                      <input
+                        type="email"
+                        value={profileEmail}
+                        onChange={(e) => setProfileEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-[#070E24] border border-slate-300 dark:border-white/15 text-sm text-slate-900 dark:text-white outline-none focus:border-[#0297DE]"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={savingProfile}
+                      className="px-6 py-2.5 rounded-xl bg-[#0297DE] hover:bg-[#0284c4] disabled:opacity-40 text-white text-sm font-semibold inline-flex items-center gap-2 cursor-pointer transition-all"
+                    >
+                      {savingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
+                      <span>{savingProfile ? 'Сохранение...' : 'Сохранить профиль'}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Профиль: Смена пароля */}
+              <div className="rounded-2xl bg-white/90 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 p-6 md:p-7 space-y-6 backdrop-blur-md">
+                <div className="border-b border-slate-200 dark:border-white/10 pb-4">
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+                    <KeyRound className="w-5 h-5 text-[#FC734D]" />
+                    Безопасность и пароль
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Для изменения пароля укажите ваш текущий пароль и новый надёжный пароль (минимум 6 символов).
+                  </p>
+                </div>
+
+                {passwordNotice && (
+                  <div
+                    className={`p-3.5 rounded-xl text-xs font-medium flex items-center gap-2.5 ${
+                      passwordNotice.type === 'ok'
+                        ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                        : 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
+                    }`}
+                  >
+                    {passwordNotice.type === 'ok' ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                    )}
+                    <span>{passwordNotice.text}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleSavePassword} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                      Текущий пароль
+                    </label>
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-[#070E24] border border-slate-300 dark:border-white/15 text-sm text-slate-900 dark:text-white outline-none focus:border-[#FC734D]"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Новый пароль
+                      </label>
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-[#070E24] border border-slate-300 dark:border-white/15 text-sm text-slate-900 dark:text-white outline-none focus:border-[#FC734D]"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Повторите новый пароль
+                      </label>
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-[#070E24] border border-slate-300 dark:border-white/15 text-sm text-slate-900 dark:text-white outline-none focus:border-[#FC734D]"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={savingPassword}
+                      className="px-6 py-2.5 rounded-xl bg-[#FC734D] hover:bg-[#fb6338] disabled:opacity-40 text-white text-sm font-semibold inline-flex items-center gap-2 cursor-pointer transition-all"
+                    >
+                      {savingPassword && <Loader2 className="w-4 h-4 animate-spin" />}
+                      <span>{savingPassword ? 'Обновление...' : 'Обновить пароль'}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ================= TAB: SUPPORT (ПОДДЕРЖКА) ================= */}
+          {activeTab === 'support' && (
+            <div className="rounded-2xl bg-white/90 dark:bg-[#0E1A3B]/85 border border-slate-200 dark:border-white/10 p-6 md:p-7 space-y-5 backdrop-blur-md min-h-[560px] flex flex-col justify-between">
+              {/* Header */}
+              <div className="pb-4 border-b border-slate-200 dark:border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <div className="text-slate-500 dark:text-slate-400 mb-1">Email</div>
-                  <div className="font-semibold text-slate-900 dark:text-white">{user.email}</div>
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+                    <MessageSquare className="w-5 h-5 text-[#0297DE]" />
+                    Служба заботы PATRIK AI
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Задайте любой вопрос или опишите сложность — администратор получит мгновенное
+                    уведомление в Telegram и ответит здесь.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Telegram-бот онлайн
+                  </span>
+                  <button
+                    onClick={loadUserSupportMessages}
+                    title="Обновить переписку"
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loadingSupport ? 'animate-spin' : ''}`} />
+                  </button>
                 </div>
               </div>
+
+              {/* Info banner */}
+              <div className="p-3 rounded-xl bg-slate-100 dark:bg-[#070E24] border border-slate-200 dark:border-white/10 text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Lock className="w-3.5 h-3.5 text-[#0297DE]" />
+                  Все сообщения шифруются ключом AES-256-GCM в базе данных.
+                </span>
+                <span className="text-[11px] text-slate-400 hidden sm:inline">
+                  Telegram ID админа: 5103486897
+                </span>
+              </div>
+
+              {/* Notice */}
+              {supportNotice && (
+                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-medium flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{supportNotice}</span>
+                </div>
+              )}
+
+              {/* Chat thread */}
+              <div className="flex-1 space-y-3 overflow-y-auto max-h-[380px] my-2 pr-1 flex flex-col justify-end">
+                {supportMessages.length === 0 ? (
+                  <div className="text-center py-10 space-y-2">
+                    <div className="w-12 h-12 rounded-full bg-[#0297DE]/15 text-[#0297DE] flex items-center justify-center mx-auto">
+                      <MessageSquare className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                      Здравствуйте, {user.full_name}!
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                      Напишите ваш вопрос ниже. Мы сразу получим его в Telegram и ответим вам в этом
+                      чате.
+                    </p>
+                  </div>
+                ) : (
+                  supportMessages.map((m) => {
+                    const isUser = m.sender === 'user';
+                    return (
+                      <div
+                        key={m.id}
+                        className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
+                      >
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mb-1 px-1">
+                          <span>{isUser ? 'Вы' : 'Поддержка PATRIK AI'}</span>
+                          <span>•</span>
+                          <span>
+                            {m.createdAt
+                              ? new Date(m.createdAt).toLocaleTimeString('ru-RU', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : ''}
+                          </span>
+                        </div>
+                        <div
+                          className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed shadow-sm ${
+                            isUser
+                              ? 'bg-[#0297DE] text-white rounded-br-none'
+                              : 'bg-slate-100 dark:bg-[#132044] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 rounded-bl-none'
+                          }`}
+                        >
+                          {m.text}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Send message form */}
+              <form onSubmit={handleSendSupportMessage} className="pt-3 border-t border-slate-200 dark:border-white/10 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={supportText}
+                  onChange={(e) => setSupportText(e.target.value)}
+                  placeholder="Опишите ваш вопрос или пожелание..."
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-[#070E24] border border-slate-300 dark:border-white/15 text-sm text-slate-900 dark:text-white outline-none placeholder:text-slate-400 focus:border-[#0297DE]"
+                />
+                <button
+                  type="submit"
+                  disabled={sendingSupport || !supportText.trim()}
+                  className="px-5 py-2.5 rounded-xl bg-[#FC734D] hover:bg-[#fb6338] disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold inline-flex items-center gap-2 cursor-pointer transition-all shadow-md shadow-[#FC734D]/20"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>{sendingSupport ? 'Отправка...' : 'Отправить'}</span>
+                </button>
+              </form>
             </div>
           )}
 

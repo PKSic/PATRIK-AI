@@ -309,6 +309,75 @@ const usersByEmail = new Map();
 const sessions = new Map(); // token -> { email, expiresAt }
 const pendingPayments = new Map(); // sessionId -> paymentSessionData
 const processedWebhooks = new Set(); // Replay protection for webhook transaction IDs
+const supportMessages = []; // Хранилище сообщений поддержки { id, userId, userEmail, userName, sender, encrypted_text, iv, auth_tag, is_read, createdAt }
+
+// Настройки шифрования сообщений поддержки (AES-256-GCM)
+const SUPPORT_ENCRYPTION_KEY = process.env.SUPPORT_ENCRYPTION_KEY || 'patrik_support_aes_secret_key_2026_safe';
+const SUPPORT_KEY_BUF = crypto.createHash('sha256').update(SUPPORT_ENCRYPTION_KEY).digest();
+
+// Интеграция с Telegram-ботом поддержки
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8751417025:AAEOl_Vmo5NGRZFIHgUQC7FBfdrKD4RakCQ';
+const TELEGRAM_ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || '5103486897';
+
+function encryptSupportMessage(plainText) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', SUPPORT_KEY_BUF, iv);
+  const enc = Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return {
+    encrypted_text: enc.toString('hex'),
+    iv: iv.toString('hex'),
+    auth_tag: tag.toString('hex'),
+  };
+}
+
+function decryptSupportMessage(encryptedHex, ivHex, tagHex) {
+  try {
+    const iv = Buffer.from(ivHex, 'hex');
+    const tag = Buffer.from(tagHex, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', SUPPORT_KEY_BUF, iv);
+    decipher.setAuthTag(tag);
+    const dec = Buffer.concat([decipher.update(Buffer.from(encryptedHex, 'hex')), decipher.final()]);
+    return dec.toString('utf8');
+  } catch {
+    return '[Зашифрованное сообщение]';
+  }
+}
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+async function notifyAdminInTelegram(user, messageText) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_ADMIN_CHAT_ID) return;
+  try {
+    const timeStr = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
+    const text =
+      `📬 <b>Новое обращение в поддержку PATRIK AI</b>\n\n` +
+      `👤 <b>Пользователь:</b> ${escapeHtml(user.full_name || 'Без имени')}\n` +
+      `📧 <b>Email:</b> ${escapeHtml(user.email)}\n` +
+      `⭐ <b>Тариф:</b> ${user.subscription ? escapeHtml(user.subscription.plan_name) : 'Starter (Free)'}\n` +
+      `⏰ <b>Время:</b> ${timeStr}\n\n` +
+      `💬 <b>Сообщение:</b>\n<i>${escapeHtml(messageText)}</i>\n\n` +
+      `<i>👉 Ответить пользователю можно в панели управления в разделе «Чат поддержки».</i>`;
+
+    const url = 'https://api.telegram.org/bot' + TELEGRAM_BOT_TOKEN + '/sendMessage';
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_ADMIN_CHAT_ID,
+        text,
+        parse_mode: 'HTML',
+      }),
+    });
+  } catch (err) {
+    console.error('Ошибка отправки уведомления в Telegram:', err.message);
+  }
+}
 
 // Секретный ключ подписи платёжного шлюза (из .env или криптографический ключ времени выполнения)
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || (() => {
@@ -477,6 +546,7 @@ function saveStore() {
       sessions: Array.from(sessions.entries()),
       pendingPayments: Array.from(pendingPayments.entries()),
       processedWebhooks: Array.from(processedWebhooks),
+      supportMessages,
     };
     fs.writeFileSync(STORE_FILE, JSON.stringify(payload, null, 2), 'utf8');
   } catch (e) {
@@ -529,6 +599,9 @@ function loadStore() {
       for (const wId of data.processedWebhooks) {
         processedWebhooks.add(wId);
       }
+    }
+    if (Array.isArray(data.supportMessages)) {
+      supportMessages.splice(0, supportMessages.length, ...data.supportMessages);
     }
     console.log('💾 Состояние сервера загружено из backend/data/store.json');
   } catch (e) {
@@ -689,11 +762,48 @@ app.post('/api/auth/register', rateLimit(10, 5 * 60 * 1000), async (req, res) =>
         [newUser.email, newUser.passwordHash, newUser.full_name, newUser.role]
       );
       if (inserted.rows[0]?.id) newUser.id = inserted.rows[0].id;
+
+      // Автоматическая привязка базового тарифа Starter в PostgreSQL
+      const starterPlan = PLANS.find((p) => p.slug === 'starter') || PLANS[0];
+      const expDate = new Date();
+      expDate.setMonth(expDate.getMonth() + 1);
+      const expStr = expDate.toISOString().slice(0, 10);
+      try {
+        await pool.query(
+          'INSERT INTO subscriptions (user_id, plan_id, billing_cycle, status, expires_at) VALUES ($1, $2, $3, $4, $5)',
+          [newUser.id, starterPlan.id, 'monthly', 'active', expStr]
+        );
+      } catch {}
+      newUser.subscription = {
+        plan_slug: starterPlan.slug,
+        plan_name: starterPlan.name,
+        tier: starterPlan.tier,
+        billing_cycle: 'monthly',
+        status: 'active',
+        tokens_used: 0,
+        token_limit: starterPlan.token_limit,
+        expires_at: expStr,
+      };
     } catch (e) {
       console.error('Ошибка вставки пользователя в PostgreSQL:', e);
       usersByEmail.delete(normalized);
       return res.status(500).json({ error: 'Ошибка сохранения учётной записи в базе данных PostgreSQL' });
     }
+  } else {
+    // В локальном хранилище также сразу активируем Starter
+    const starterPlan = PLANS.find((p) => p.slug === 'starter') || PLANS[0];
+    const expDate = new Date();
+    expDate.setMonth(expDate.getMonth() + 1);
+    newUser.subscription = {
+      plan_slug: starterPlan.slug,
+      plan_name: starterPlan.name,
+      tier: starterPlan.tier,
+      billing_cycle: 'monthly',
+      status: 'active',
+      tokens_used: 0,
+      token_limit: starterPlan.token_limit,
+      expires_at: expDate.toISOString().slice(0, 10),
+    };
   }
 
   const token = createSessionToken(newUser);
@@ -703,6 +813,93 @@ app.post('/api/auth/register', rateLimit(10, 5 * 60 * 1000), async (req, res) =>
   res.json({
     token,
     user: { id: newUser.id, email: newUser.email, full_name: newUser.full_name, role: newUser.role },
+  });
+});
+
+// Обновление профиля пользователя (имя / ник, email)
+app.put('/api/user/profile', requireAuth, async (req, res) => {
+  const { full_name, email } = req.body || {};
+  const u = req.user;
+  const oldEmail = u.email;
+
+  if (full_name !== undefined) {
+    const cleanName = sanitizeText(full_name, 80);
+    if (!cleanName) return res.status(400).json({ error: 'Имя не может быть пустым' });
+    u.full_name = cleanName;
+  }
+
+  if (email !== undefined && typeof email === 'string') {
+    const normalized = email.trim().toLowerCase();
+    if (!EMAIL_RE.test(normalized) || normalized.length > 150) {
+      return res.status(400).json({ error: 'Введите корректный email' });
+    }
+    if (normalized !== oldEmail) {
+      if (usersByEmail.has(normalized) || (await loadUserFromPg(normalized))) {
+        return res.status(409).json({ error: 'Аккаунт с таким email уже существует' });
+      }
+      usersByEmail.delete(oldEmail);
+      u.email = normalized;
+      usersByEmail.set(normalized, u);
+    }
+  }
+
+  if (pgAvailable && pool) {
+    try {
+      await pool.query(
+        'UPDATE users SET full_name = $1, email = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+        [u.full_name, u.email, u.id]
+      );
+    } catch (e) {
+      console.error('Ошибка обновления профиля в PostgreSQL:', e);
+      return res.status(500).json({ error: 'Ошибка сохранения профиля в базе данных' });
+    }
+  }
+
+  saveStore();
+  const token = createSessionToken(u);
+  res.json({
+    success: true,
+    message: 'Профиль успешно обновлён',
+    user: { id: u.id, email: u.email, full_name: u.full_name, role: u.role },
+    token,
+  });
+});
+
+// Смена пароля пользователя
+app.put('/api/user/password', requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Укажите текущий и новый пароль' });
+  }
+  if (typeof newPassword !== 'string' || newPassword.length < 6 || newPassword.length > 128) {
+    return res.status(400).json({ error: 'Новый пароль должен быть от 6 до 128 символов' });
+  }
+
+  const u = req.user;
+  if (!verifyPassword(currentPassword, u.passwordHash)) {
+    return res.status(400).json({ error: 'Текущий пароль указан неверно' });
+  }
+
+  u.passwordHash = hashPassword(newPassword);
+
+  if (pgAvailable && pool) {
+    try {
+      await pool.query(
+        'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [u.passwordHash, u.id]
+      );
+    } catch (e) {
+      console.error('Ошибка смены пароля в PostgreSQL:', e);
+      return res.status(500).json({ error: 'Ошибка сохранения нового пароля в базе данных' });
+    }
+  }
+
+  saveStore();
+  const token = createSessionToken(u);
+  res.json({
+    success: true,
+    message: 'Пароль успешно изменён',
+    token,
   });
 });
 
@@ -1322,6 +1519,204 @@ app.get('/api/admin/users', requireAuth, requireAdmin, (_req, res) => {
     keys_count: u.apiKeys.length,
   }));
   res.json(list);
+});
+
+// ================= СЛУЖБА ПОДДЕРЖКИ (С ТЕЛЕГРАМ-БОТОМ И ШИФРОВАНИЕМ) =================
+
+// Получение истории сообщений текущего пользователя
+app.get('/api/support/messages', requireAuth, async (req, res) => {
+  const u = req.user;
+  const list = supportMessages
+    .filter((m) => m.userId === u.id || (m.userEmail && m.userEmail.toLowerCase() === u.email.toLowerCase()))
+    .map((m) => ({
+      id: m.id,
+      sender: m.sender,
+      userName: m.userName,
+      text: decryptSupportMessage(m.encrypted_text, m.iv, m.auth_tag),
+      createdAt: m.createdAt,
+    }));
+  res.json({ messages: list });
+});
+
+// Отправка обращения пользователем в поддержку (AES-256-GCM шифрование + Telegram notification)
+app.post('/api/support/messages', requireAuth, rateLimit(30, 60 * 1000), async (req, res) => {
+  const { text } = req.body || {};
+  const clean = sanitizeText(text, 2500);
+  if (!clean) {
+    return res.status(400).json({ error: 'Текст сообщения не может быть пустым' });
+  }
+
+  const u = req.user;
+  const enc = encryptSupportMessage(clean);
+  const msgRecord = {
+    id: supportMessages.length + 1,
+    userId: u.id,
+    userEmail: u.email,
+    userName: u.full_name || 'Пользователь',
+    sender: 'user',
+    encrypted_text: enc.encrypted_text,
+    iv: enc.iv,
+    auth_tag: enc.auth_tag,
+    is_read: false,
+    createdAt: new Date().toISOString(),
+  };
+
+  supportMessages.push(msgRecord);
+  saveStore();
+
+  if (pgAvailable && pool) {
+    try {
+      const inserted = await pool.query(
+        'INSERT INTO support_messages (user_id, sender, encrypted_text, iv, auth_tag, is_read) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+        [u.id, 'user', enc.encrypted_text, enc.iv, enc.auth_tag, false]
+      );
+      if (inserted.rows[0]?.id) msgRecord.id = inserted.rows[0].id;
+    } catch (e) {
+      console.error('Ошибка записи сообщения поддержки в PostgreSQL:', e);
+    }
+  }
+
+  // Мгновенная отправка в Telegram бот администратора
+  notifyAdminInTelegram(u, clean);
+
+  res.json({
+    success: true,
+    message: {
+      id: msgRecord.id,
+      sender: 'user',
+      userName: msgRecord.userName,
+      text: clean,
+      createdAt: msgRecord.createdAt,
+    },
+    id: msgRecord.id,
+    sender: 'user',
+    userName: msgRecord.userName,
+    text: clean,
+    createdAt: msgRecord.createdAt,
+  });
+});
+
+// Админ-панель: список диалогов со сводкой и счётчиком непрочитанных
+app.get('/api/admin/support/chats', requireAuth, requireAdmin, async (_req, res) => {
+  const chatsMap = new Map();
+
+  for (const m of supportMessages) {
+    const key = String(m.userId || m.userEmail).toLowerCase();
+    if (!chatsMap.has(key)) {
+      chatsMap.set(key, {
+        userId: m.userId,
+        userEmail: m.userEmail,
+        userName: m.userName || m.userEmail,
+        unreadCount: 0,
+        lastMessage: '',
+        lastMessageAt: m.createdAt,
+      });
+    }
+    const chat = chatsMap.get(key);
+    if (!m.is_read && m.sender === 'user') {
+      chat.unreadCount += 1;
+    }
+    chat.lastMessage = decryptSupportMessage(m.encrypted_text, m.iv, m.auth_tag);
+    chat.lastMessageAt = m.createdAt;
+  }
+
+  res.json(Array.from(chatsMap.values()).reverse());
+});
+
+// Админ-панель: переписка с выбранным пользователем и отметка о прочтении
+app.get('/api/admin/support/messages/:userId', requireAuth, requireAdmin, async (req, res) => {
+  const targetId = Number(req.params.userId);
+  const targetEmail = String(req.params.userId).toLowerCase();
+
+  const msgs = supportMessages
+    .filter((m) => m.userId === targetId || (m.userEmail && m.userEmail.toLowerCase() === targetEmail))
+    .map((m) => {
+      if (m.sender === 'user') m.is_read = true;
+      return {
+        id: m.id,
+        sender: m.sender,
+        userName: m.userName,
+        text: decryptSupportMessage(m.encrypted_text, m.iv, m.auth_tag),
+        createdAt: m.createdAt,
+      };
+    });
+
+  saveStore();
+
+  if (pgAvailable && pool && !Number.isNaN(targetId)) {
+    try {
+      await pool.query(
+        'UPDATE support_messages SET is_read = true WHERE user_id = $1 AND sender = $2',
+        [targetId, 'user']
+      );
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  res.json({ messages: msgs });
+});
+
+// Админ-панель: ответ администратора пользователю
+app.post('/api/admin/support/messages/:userId', requireAuth, requireAdmin, async (req, res) => {
+  const targetId = Number(req.params.userId);
+  const targetEmail = String(req.params.userId).toLowerCase();
+  const { text } = req.body || {};
+  const clean = sanitizeText(text, 2500);
+  if (!clean) return res.status(400).json({ error: 'Текст ответа не может быть пустым' });
+
+  let targetUser = null;
+  for (const u of usersByEmail.values()) {
+    if (u.id === targetId || u.email.toLowerCase() === targetEmail) {
+      targetUser = u;
+      break;
+    }
+  }
+
+  const enc = encryptSupportMessage(clean);
+  const msgRecord = {
+    id: supportMessages.length + 1,
+    userId: targetUser ? targetUser.id : targetId,
+    userEmail: targetUser ? targetUser.email : targetEmail,
+    userName: 'Поддержка PATRIK AI',
+    sender: 'admin',
+    encrypted_text: enc.encrypted_text,
+    iv: enc.iv,
+    auth_tag: enc.auth_tag,
+    is_read: true,
+    createdAt: new Date().toISOString(),
+  };
+
+  supportMessages.push(msgRecord);
+  saveStore();
+
+  if (pgAvailable && pool && targetUser) {
+    try {
+      const inserted = await pool.query(
+        'INSERT INTO support_messages (user_id, sender, encrypted_text, iv, auth_tag, is_read) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+        [targetUser.id, 'admin', enc.encrypted_text, enc.iv, enc.auth_tag, true]
+      );
+      if (inserted.rows[0]?.id) msgRecord.id = inserted.rows[0].id;
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  res.json({
+    success: true,
+    message: {
+      id: msgRecord.id,
+      sender: 'admin',
+      userName: 'Поддержка PATRIK AI',
+      text: clean,
+      createdAt: msgRecord.createdAt,
+    },
+    id: msgRecord.id,
+    sender: 'admin',
+    userName: 'Поддержка PATRIK AI',
+    text: clean,
+    createdAt: msgRecord.createdAt,
+  });
 });
 
 // Глобальный обработчик ошибок (не раскрывает стек-трейс клиенту)
