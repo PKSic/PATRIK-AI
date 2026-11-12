@@ -79,13 +79,21 @@ export const LightBeams: React.FC<LightBeamsProps> = ({ className = '' }) => {
         const beamH = height * (0.38 + 0.44 * profile * (0.55 + 0.45 * melody));
         const yTop = height - beamH;
 
-        const baseAlpha = isDark ? 0.42 + 0.26 * melody : 0.2 + 0.14 * melody;
+        const baseAlpha = isDark ? 0.42 + 0.26 * melody : 0.55 + 0.28 * melody;
 
         const grad = ctx.createLinearGradient(x, height, x, yTop);
-        grad.addColorStop(0, `rgba(255, 255, 255, ${(baseAlpha * 0.65).toFixed(3)})`);
-        grad.addColorStop(0.18, `rgba(${r}, ${g}, ${b}, ${baseAlpha.toFixed(3)})`);
-        grad.addColorStop(0.65, `rgba(${r}, ${g}, ${b}, ${(baseAlpha * 0.28).toFixed(3)})`);
-        grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+        if (isDark) {
+          grad.addColorStop(0, `rgba(255, 255, 255, ${(baseAlpha * 0.65).toFixed(3)})`);
+          grad.addColorStop(0.18, `rgba(${r}, ${g}, ${b}, ${baseAlpha.toFixed(3)})`);
+          grad.addColorStop(0.65, `rgba(${r}, ${g}, ${b}, ${(baseAlpha * 0.28).toFixed(3)})`);
+          grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+        } else {
+          // Светлая тема: яркие насыщенные цвета с фото (Глубокий синий #09318D и Нежно-розовый #F59ACC)
+          grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(baseAlpha * 0.95).toFixed(3)})`);
+          grad.addColorStop(0.25, `rgba(${r}, ${g}, ${b}, ${baseAlpha.toFixed(3)})`);
+          grad.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, ${(baseAlpha * 0.38).toFixed(3)})`);
+          grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+        }
 
         ctx.fillStyle = grad;
         ctx.fillRect(x, yTop, beamWidth, beamH);
@@ -107,15 +115,24 @@ export const LightBeams: React.FC<LightBeamsProps> = ({ className = '' }) => {
       aria-hidden="true"
       className={`pointer-events-none fixed inset-0 z-0 overflow-hidden ${className}`}
     >
-      {/* Мягкое бесшовное свечение на фоне, чтобы не было резких переходов */}
+      {/* Мягкое бесшовное свечение на фоне (подходящие цвета для светлой и тёмной темы) */}
       <div
-        className="absolute inset-0 opacity-45 dark:opacity-55"
+        className="absolute inset-0 pointer-events-none transition-opacity duration-500 opacity-60 dark:opacity-50"
+        style={{
+          background:
+            'radial-gradient(ellipse 65% 55% at 50% 105%, var(--tw-glow-center, rgba(245,154,204,0.45)), transparent 70%), radial-gradient(ellipse 50% 50% at 10% 100%, var(--tw-glow-edge, rgba(9,49,141,0.22)), transparent 70%), radial-gradient(ellipse 50% 50% at 90% 100%, var(--tw-glow-edge, rgba(9,49,141,0.22)), transparent 70%)',
+        }}
+      />
+      {/* Тёмная тема фонового свечения */}
+      <div
+        className="hidden dark:block absolute inset-0 pointer-events-none opacity-55"
         style={{
           background:
             'radial-gradient(ellipse 65% 55% at 50% 105%, rgba(252,115,77,0.35), transparent 70%), radial-gradient(ellipse 50% 50% at 10% 100%, rgba(2,151,222,0.28), transparent 70%), radial-gradient(ellipse 50% 50% at 90% 100%, rgba(2,151,222,0.28), transparent 70%)',
         }}
       />
-      <canvas ref={canvasRef} className="w-full h-full block blur-[10px] opacity-80" />
+      {/* Размытие сделано слабее (blur-[4px] вместо blur-[10px]), чтобы лучи были чёткими и красивыми */}
+      <canvas ref={canvasRef} className="w-full h-full block blur-[4px] opacity-95" />
     </div>
   );
 };
