@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Zap,
   ArrowRight,
@@ -36,6 +36,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 }) => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [openFaq, setOpenFaq] = useState<number>(0);
+  const [ping, setPing] = useState(() => ~~(Math.random() * 25) + 32);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setPing(~~(Math.random() * 25) + 32);
+    }, 10 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const faqs = [
     {
@@ -214,8 +222,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <span className="text-sm font-semibold text-[#09318D] dark:text-slate-200">
                   Пайплайн генерации API
                 </span>
-                <span className="px-2 py-0.5 rounded-full bg-[#09318D]/10 dark:bg-white/10 text-[10px] font-mono text-[#09318D] dark:text-slate-300">
-                  42ms ping
+                <span
+                  onClick={() => setPing(~~(Math.random() * 25) + 32)}
+                  title="Нажмите для обновления пинга"
+                  className="px-2 py-0.5 rounded-full bg-[#09318D]/10 dark:bg-white/10 text-[10px] font-mono text-[#09318D] dark:text-slate-300 cursor-pointer select-none transition-all active:scale-95 hover:bg-[#09318D]/20 dark:hover:bg-white/20"
+                >
+                  {ping}ms ping
                 </span>
               </div>
 
