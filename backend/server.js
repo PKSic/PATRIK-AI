@@ -308,49 +308,113 @@ let siteConfig = {
 const usersByEmail = new Map();
 const sessions = new Map(); // token -> { email, expiresAt }
 const revokedTokens = new Set();
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней
 const SESSION_SECRET =
   process.env.SESSION_SECRET ||
-  crypto
-    .createHash('sha256')
-    .update(process.env.DATABASE_URL || process.env.VERCEL_PROJECT_ID || 'patrik-local-dev-secret')
-    .digest('hex');
+  'patrik-ai-session-key-2026-production-fallback-do-not-change-randomly';
+const TOKEN_ENC_KEY = crypto.createHash('sha256').update(SESSION_SECRET).digest();
 
-function createSessionToken(email) {
-  const payload = Buffer.from(
-    JSON.stringify({ email, exp: Date.now() + SESSION_TTL_MS })
-  ).toString('base64url');
-  const sig = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
-  return `${payload}.${sig}`;
+function createSessionToken(userOrEmail) {
+  let userObj;
+  if (typeof userOrEmail === 'string') {
+    const existing = usersByEmail.get(userOrEmail.trim().toLowerCase());
+    userObj = existing || {
+      id: 1,
+      email: userOrEmail.trim().toLowerCase(),
+      full_name: 'Пользователь',
+      role: ADMIN_EMAILS.has(userOrEmail.trim().toLowerCase()) ? 'admin' : 'user',
+      subscription: null,
+      transactions: [],
+      apiKeys: [],
+    };
+  } else {
+    userObj = userOrEmail;
+  }
+
+  const normalizedEmail = String(userObj.email || '').trim().toLowerCase();
+  const payload = {
+    id: userObj.id || 1,
+    email: normalizedEmail,
+    full_name: userObj.full_name || 'Пользователь',
+    role: ADMIN_EMAILS.has(normalizedEmail) ? 'admin' : (userObj.role || 'user'),
+    subscription: userObj.subscription || null,
+    transactions: (userObj.transactions || []).slice(0, 20),
+    apiKeys: (userObj.apiKeys || []).map(({ keyHash, ...safe }) => safe),
+    passwordHash: userObj.passwordHash || '',
+    exp: Date.now() + SESSION_TTL_MS,
+  };
+
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', TOKEN_ENC_KEY, iv);
+  const enc = Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  return `v2.${iv.toString('base64url')}.${tag.toString('base64url')}.${enc.toString('base64url')}`;
 }
 
 function verifySessionToken(token) {
-  if (!token || revokedTokens.has(token)) return null;
-  const legacy = sessions.get(token);
-  if (legacy) {
-    if (legacy.expiresAt < Date.now()) {
-      sessions.delete(token);
-      saveStore();
-      return null;
+  if (!token || typeof token !== 'string' || revokedTokens.has(token)) return null;
+
+  // Новый зашифрованный stateless токен v2 (хранит полный профиль и подписку)
+  if (token.startsWith('v2.')) {
+    const parts = token.slice(3).split('.');
+    if (parts.length === 3) {
+      try {
+        const [ivB64, tagB64, encB64] = parts;
+        const iv = Buffer.from(ivB64, 'base64url');
+        const tag = Buffer.from(tagB64, 'base64url');
+        const enc = Buffer.from(encB64, 'base64url');
+        if (iv.length === 12 && tag.length === 16) {
+          const decipher = crypto.createDecipheriv('aes-256-gcm', TOKEN_ENC_KEY, iv);
+          decipher.setAuthTag(tag);
+          const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
+          const data = JSON.parse(dec.toString('utf8'));
+          if (data?.email && data?.exp && data.exp > Date.now()) {
+            const email = String(data.email).trim().toLowerCase();
+            return {
+              email,
+              expiresAt: data.exp,
+              user: {
+                id: data.id || 1,
+                email,
+                full_name: data.full_name || 'Пользователь',
+                role: ADMIN_EMAILS.has(email) ? 'admin' : (data.role || 'user'),
+                subscription: data.subscription || null,
+                transactions: data.transactions || [],
+                apiKeys: data.apiKeys || [],
+                passwordHash: data.passwordHash || '',
+              },
+            };
+          }
+        }
+      } catch {
+        // невалидный токен
+      }
     }
+  }
+
+  // Поддержка legacy сессий
+  const legacy = sessions.get(token);
+  if (legacy && legacy.expiresAt > Date.now()) {
     return legacy;
   }
   const parts = token.split('.');
-  if (parts.length !== 2) return null;
-  const [payloadB64, sigHex] = parts;
-  const expectedHex = crypto.createHmac('sha256', SESSION_SECRET).update(payloadB64).digest('hex');
-  const sigBuf = Buffer.from(sigHex, 'utf8');
-  const expectedBuf = Buffer.from(expectedHex, 'utf8');
-  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
-    return null;
+  if (parts.length === 2) {
+    try {
+      const [payloadB64, sigHex] = parts;
+      const expectedHex = crypto.createHmac('sha256', SESSION_SECRET).update(payloadB64).digest('hex');
+      const sigBuf = Buffer.from(sigHex, 'utf8');
+      const expectedBuf = Buffer.from(expectedHex, 'utf8');
+      if (sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+        const parsed = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+        if (parsed?.email && parsed?.exp && parsed.exp > Date.now()) {
+          const email = String(parsed.email).trim().toLowerCase();
+          return { email, expiresAt: parsed.exp };
+        }
+      }
+    } catch {}
   }
-  try {
-    const parsed = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
-    if (!parsed?.email || !parsed?.exp || parsed.exp < Date.now()) return null;
-    return { email: parsed.email, expiresAt: parsed.exp };
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 const ADMIN_EMAILS = new Set([
@@ -458,13 +522,41 @@ async function requireAuth(req, res, next) {
   if (!session || session.expiresAt < Date.now()) {
     return res.status(401).json({ error: 'Пожалуйста, войдите или зарегистрируйте аккаунт' });
   }
+
   let user = usersByEmail.get(session.email);
+  if (!user && session.user) {
+    user = session.user;
+    if (ADMIN_EMAILS.has(user.email)) user.role = 'admin';
+    usersByEmail.set(user.email, user);
+    saveStore();
+  }
   if (!user) {
     user = await loadUserFromPg(session.email);
   }
   if (!user) {
     return res.status(401).json({ error: 'Пожалуйста, войдите или зарегистрируйте аккаунт' });
   }
+
+  // Если сервер перезапустился, восстанавливаем актуальные подписки и транзакции из токена
+  if (session.user) {
+    if (!user.subscription && session.user.subscription) {
+      user.subscription = session.user.subscription;
+    }
+    if ((!user.transactions || user.transactions.length === 0) && session.user.transactions?.length) {
+      user.transactions = session.user.transactions;
+    }
+    if ((!user.apiKeys || user.apiKeys.length === 0) && session.user.apiKeys?.length) {
+      user.apiKeys = session.user.apiKeys;
+    }
+    if (!user.passwordHash && session.user.passwordHash) {
+      user.passwordHash = session.user.passwordHash;
+    }
+  }
+
+  if (ADMIN_EMAILS.has(user.email)) {
+    user.role = 'admin';
+  }
+
   req.user = user;
   next();
 }
@@ -501,6 +593,15 @@ app.post('/api/auth/login', rateLimit(15, 5 * 60 * 1000), async (req, res) => {
 
   let user = usersByEmail.get(normalized);
   if (!user) {
+    const authHeader = req.headers.authorization || '';
+    const reqTok = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    const session = verifySessionToken(reqTok);
+    if (session?.user && session.email === normalized) {
+      user = session.user;
+      usersByEmail.set(normalized, user);
+    }
+  }
+  if (!user) {
     user = await loadUserFromPg(normalized);
   }
   if (!user || !verifyPassword(password, user.passwordHash)) {
@@ -515,7 +616,7 @@ app.post('/api/auth/login', rateLimit(15, 5 * 60 * 1000), async (req, res) => {
     user.role = 'admin';
   }
 
-  const token = createSessionToken(normalized);
+  const token = createSessionToken(user);
   sessions.set(token, { email: normalized, expiresAt: Date.now() + SESSION_TTL_MS });
   saveStore();
 
@@ -567,7 +668,7 @@ app.post('/api/auth/register', rateLimit(10, 5 * 60 * 1000), async (req, res) =>
     }
   }
 
-  const token = createSessionToken(normalized);
+  const token = createSessionToken(newUser);
   sessions.set(token, { email: normalized, expiresAt: Date.now() + SESSION_TTL_MS });
   saveStore();
 
@@ -596,6 +697,7 @@ app.get('/api/dashboard', requireAuth, (req, res) => {
     subscription: u.subscription,
     transactions: u.transactions,
     apiKeys: u.apiKeys.map(({ keyHash, ...safe }) => safe),
+    token: createSessionToken(u),
   });
 });
 
@@ -710,6 +812,7 @@ app.post('/api/subscribe', requireAuth, async (req, res) => {
       tx_code: txCode,
       subscription: u.subscription,
       transactions: u.transactions,
+      token: createSessionToken(u),
     });
   } finally {
     inFlightSubscriptions.delete(u.email);
@@ -760,6 +863,7 @@ app.post('/api/keys', requireAuth, (req, res) => {
   res.json({
     key: safeRecord,
     fullKey,
+    token: createSessionToken(req.user),
   });
 });
 
@@ -776,6 +880,7 @@ app.delete('/api/keys/:id', requireAuth, (req, res) => {
   saveStore();
   res.json({
     apiKeys: req.user.apiKeys.map(({ keyHash, ...safe }) => safe),
+    token: createSessionToken(req.user),
   });
 });
 

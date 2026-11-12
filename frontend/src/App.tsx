@@ -18,14 +18,42 @@ import {
 } from './types';
 
 export const App: React.FC = () => {
-  const [page, setPage] = useState<PageName>('landing');
+  // Сессия хранится в localStorage браузера; восстанавливаем сразу при открытии и обновлении страницы
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('patrik_token'));
+  const [user, setUser] = useState<UserInfo | null>(() => {
+    try {
+      const saved = localStorage.getItem('patrik_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(() => {
+    try {
+      const saved = localStorage.getItem('patrik_subscription');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [page, setPage] = useState<PageName>(() => {
+    const saved = localStorage.getItem('patrik_page') as PageName;
+    const hasAuth = Boolean(localStorage.getItem('patrik_token') || localStorage.getItem('patrik_user'));
+    if (saved === 'dashboard') return hasAuth ? 'dashboard' : 'landing';
+    if (saved === 'docs') return 'docs';
+    if (saved === 'auth') return hasAuth ? 'dashboard' : 'auth';
+    return 'landing';
+  });
+
+  const navigateTo = (target: PageName) => {
+    setPage(target);
+    localStorage.setItem('patrik_page', target);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const [theme, setTheme] = useState<ThemeMode>(() => {
     return (localStorage.getItem('patrik_theme') as ThemeMode) || 'dark';
   });
-
-  // Сессия хранится только как токен в localStorage; все приватные данные запрашиваются с сервера
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('patrik_token'));
-  const [user, setUser] = useState<UserInfo | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [siteConfig, setSiteConfig] = useState<SiteConfig>({
     brandName: 'PATRIK AI',
@@ -43,7 +71,6 @@ export const App: React.FC = () => {
     stat4Label: 'запросов ежедневно',
     supportEmail: 'support@patrik.ai',
   });
-  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
 
@@ -98,19 +125,36 @@ export const App: React.FC = () => {
       });
       if (res.status === 401) {
         localStorage.removeItem('patrik_token');
+        localStorage.removeItem('patrik_user');
+        localStorage.removeItem('patrik_subscription');
+        localStorage.setItem('patrik_page', 'landing');
         setToken(null);
         setUser(null);
+        setSubscription(null);
+        setTransactions([]);
+        setApiKeys([]);
+        setPage('landing');
         return;
       }
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
+        localStorage.setItem('patrik_user', JSON.stringify(data.user));
+        if (data.token) {
+          setToken(data.token);
+          localStorage.setItem('patrik_token', data.token);
+        }
         setSubscription(data.subscription || null);
+        if (data.subscription) {
+          localStorage.setItem('patrik_subscription', JSON.stringify(data.subscription));
+        } else {
+          localStorage.removeItem('patrik_subscription');
+        }
         setTransactions(data.transactions || []);
         setApiKeys(data.apiKeys || []);
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      console.warn('Dashboard sync skipped (network/offline):', e);
     }
   };
 
@@ -125,25 +169,21 @@ export const App: React.FC = () => {
   };
 
   const openProtectedPage = (target: PageName) => {
-    if (!token || !user) {
+    if (!token && !user) {
       setAuthPromptOpen(true);
       return;
     }
-    setPage(target);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigateTo(target);
   };
 
   const handleSelectPlan = (slug: string, cycle: 'monthly' | 'yearly') => {
-    if (!token || !user) {
-      setSelectedPlanSlug(slug);
-      setSelectedCycle(cycle);
+    setSelectedPlanSlug(slug);
+    setSelectedCycle(cycle);
+    if (!token && !user) {
       setAuthPromptOpen(true);
       return;
     }
-    setSelectedPlanSlug(slug);
-    setSelectedCycle(cycle);
-    setPage('dashboard');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigateTo('dashboard');
   };
 
   const handleAuthSubmit = async (
@@ -156,7 +196,10 @@ export const App: React.FC = () => {
       const url = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ email, password, full_name: fullName }),
       });
       const data = await res.json();
@@ -164,11 +207,11 @@ export const App: React.FC = () => {
         return { ok: false, error: data.error || 'Ошибка входа' };
       }
       localStorage.setItem('patrik_token', data.token);
+      localStorage.setItem('patrik_user', JSON.stringify(data.user));
       setToken(data.token);
       setUser(data.user);
       await fetchDashboard(data.token);
-      setPage('dashboard');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      navigateTo('dashboard');
       return { ok: true };
     } catch {
       return { ok: false, error: 'Сервер недоступен' };
@@ -183,6 +226,9 @@ export const App: React.FC = () => {
       }).catch(() => {});
     }
     localStorage.removeItem('patrik_token');
+    localStorage.removeItem('patrik_user');
+    localStorage.removeItem('patrik_subscription');
+    localStorage.setItem('patrik_page', 'landing');
     setToken(null);
     setUser(null);
     setSubscription(null);
@@ -219,7 +265,14 @@ export const App: React.FC = () => {
       if (!res.ok) {
         return { ok: false, error: data.error || 'Ошибка оплаты' };
       }
+      if (data.token) {
+        setToken(data.token);
+        localStorage.setItem('patrik_token', data.token);
+      }
       setSubscription(data.subscription);
+      if (data.subscription) {
+        localStorage.setItem('patrik_subscription', JSON.stringify(data.subscription));
+      }
       setTransactions(data.transactions);
       return { ok: true };
     } catch {
@@ -243,6 +296,10 @@ export const App: React.FC = () => {
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error || 'Не удалось создать ключ' };
+      if (data.token) {
+        setToken(data.token);
+        localStorage.setItem('patrik_token', data.token);
+      }
       setApiKeys((prev) => [data.key, ...prev]);
       return { fullKey: data.fullKey };
     } catch {
@@ -259,6 +316,10 @@ export const App: React.FC = () => {
       });
       if (res.ok) {
         const data = await res.json();
+        if (data.token) {
+          setToken(data.token);
+          localStorage.setItem('patrik_token', data.token);
+        }
         setApiKeys(data.apiKeys);
       }
     } catch {
@@ -274,10 +335,7 @@ export const App: React.FC = () => {
       {/* ================= NAVBAR ================= */}
       <header className="sticky top-0 z-40 h-16 md:h-20 px-5 md:px-20 flex items-center justify-between bg-white/85 dark:bg-[#0A1430]/75 backdrop-blur-lg border-b border-[#09318D]/15 dark:border-white/10">
         <button
-          onClick={() => {
-            setPage('landing');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
+          onClick={() => navigateTo('landing')}
           className="cursor-pointer"
         >
           <PatrikLogo size={34} />
@@ -285,27 +343,24 @@ export const App: React.FC = () => {
 
         {/* Desktop Nav Links */}
         <nav className="hidden lg:flex items-center gap-8 text-sm font-medium text-[#09318D]/80 dark:text-slate-300">
-          <a href="#features" onClick={() => setPage('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
+          <a href="#features" onClick={() => navigateTo('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
             Возможности
           </a>
-          <a href="#models" onClick={() => setPage('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
+          <a href="#models" onClick={() => navigateTo('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
             Модели
           </a>
-          <a href="#pricing" onClick={() => setPage('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
+          <a href="#pricing" onClick={() => navigateTo('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
             Тарифы
           </a>
           <button
-            onClick={() => {
-              setPage('docs');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
+            onClick={() => navigateTo('docs')}
             className={`hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors cursor-pointer ${
               page === 'docs' ? 'text-[#09318D] underline decoration-[#F59ACC] decoration-2 underline-offset-4 dark:no-underline dark:text-[#FC734D] font-semibold' : ''
             }`}
           >
             Документация
           </button>
-          <a href="#faq" onClick={() => setPage('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
+          <a href="#faq" onClick={() => navigateTo('landing')} className="hover:text-[#09318D] dark:hover:text-[#0297DE] transition-colors">
             FAQ
           </a>
         </nav>
@@ -327,14 +382,14 @@ export const App: React.FC = () => {
 
           {!user ? (
             <button
-              onClick={() => setPage('auth')}
+              onClick={() => navigateTo('auth')}
               className="px-4 md:px-5 py-2 md:py-2.5 rounded-[10px] bg-[#09318D] hover:bg-[#07266e] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] text-white text-xs md:text-sm font-semibold transition-all cursor-pointer"
             >
               Войти
             </button>
           ) : (
             <button
-              onClick={() => setPage(page === 'dashboard' ? 'landing' : 'dashboard')}
+              onClick={() => navigateTo(page === 'dashboard' ? 'landing' : 'dashboard')}
               className="px-4 md:px-5 py-2 md:py-2.5 rounded-[10px] bg-[#09318D] hover:bg-[#07266e] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] text-white text-xs md:text-sm font-semibold transition-all cursor-pointer"
             >
               {page === 'dashboard' ? 'На главную' : 'Кабинет'}
@@ -349,13 +404,13 @@ export const App: React.FC = () => {
           plans={plans}
           subscription={subscription}
           siteConfig={siteConfig}
-          onNavigate={(p) => (p === 'dashboard' ? openProtectedPage('dashboard') : setPage(p))}
+          onNavigate={(p) => (p === 'dashboard' ? openProtectedPage('dashboard') : navigateTo(p))}
           onSelectPlan={handleSelectPlan}
         />
       )}
-      {page === 'dashboard' && user && token && (
+      {page === 'dashboard' && user && (
         <DashboardPage
-          token={token}
+          token={token || ''}
           user={user}
           plans={plans}
           siteConfig={siteConfig}
@@ -364,7 +419,7 @@ export const App: React.FC = () => {
           apiKeys={apiKeys}
           selectedPlanSlug={selectedPlanSlug}
           selectedCycle={selectedCycle}
-          onNavigate={setPage}
+          onNavigate={navigateTo}
           onPlansUpdated={setPlans}
           onConfigUpdated={setSiteConfig}
           onSubscribe={handleSubscribe}
@@ -406,7 +461,7 @@ export const App: React.FC = () => {
               <button
                 onClick={() => {
                   setAuthPromptOpen(false);
-                  setPage('auth');
+                  navigateTo('auth');
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-[#F59ACC] hover:bg-[#ee82bd] text-[#09318D] dark:bg-[#FC734D] dark:hover:bg-[#fb6338] dark:text-white text-sm font-semibold cursor-pointer"
               >
@@ -420,10 +475,7 @@ export const App: React.FC = () => {
       {/* ================= MOBILE BOTTOM TAB BAR ================= */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-[70px] px-5 flex items-center justify-between bg-white/95 dark:bg-[#060D21]/95 backdrop-blur-lg border-t border-slate-200 dark:border-white/10">
         <button
-          onClick={() => {
-            setPage('landing');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
+          onClick={() => navigateTo('landing')}
           className={`flex flex-col items-center gap-1 text-[11px] font-medium cursor-pointer ${
             page === 'landing' ? 'text-[#FC734D]' : 'text-slate-500 dark:text-slate-400'
           }`}
@@ -434,7 +486,7 @@ export const App: React.FC = () => {
 
         <a
           href="#pricing"
-          onClick={() => setPage('landing')}
+          onClick={() => navigateTo('landing')}
           className="flex flex-col items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400"
         >
           <CreditCard className="w-5 h-5" />
@@ -442,10 +494,7 @@ export const App: React.FC = () => {
         </a>
 
         <button
-          onClick={() => {
-            setPage('docs');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
+          onClick={() => navigateTo('docs')}
           className={`flex flex-col items-center gap-1 text-[11px] font-medium cursor-pointer ${
             page === 'docs' ? 'text-[#FC734D]' : 'text-slate-500 dark:text-slate-400'
           }`}
@@ -456,7 +505,7 @@ export const App: React.FC = () => {
 
         <a
           href="#models"
-          onClick={() => setPage('landing')}
+          onClick={() => navigateTo('landing')}
           className="flex flex-col items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400"
         >
           <LayoutGrid className="w-5 h-5" />
