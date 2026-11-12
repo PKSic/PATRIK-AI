@@ -132,17 +132,62 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
           {/* 3 Showcase Cards Row (как на фото и в Figma) */}
           <div className="mt-8 w-full grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-            {/* Card 1 */}
-            <div className="p-5 rounded-2xl bg-white/95 dark:bg-[#0E1A3B]/90 border border-[#09318D]/20 dark:border-[#0297DE]/35 backdrop-blur-md shadow-sm">
-              <div className="text-sm font-semibold text-[#09318D] dark:text-slate-200 mb-4">
-                Библиотека ИИ-моделей
+            {/* Card 1: Реальные карточки моделей из библиотеки */}
+            <div className="p-5 rounded-2xl bg-white/95 dark:bg-[#0E1A3B]/90 border border-[#09318D]/20 dark:border-[#0297DE]/35 backdrop-blur-md shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-semibold text-[#09318D] dark:text-slate-200">
+                  Библиотека ИИ-моделей
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  3 онлайн
+                </span>
               </div>
-              <div className="grid grid-cols-3 gap-2.5 mb-4">
-                <div className="h-[90px] rounded-[10px] bg-[#09318D]/85 dark:bg-[#1E3A8A]/70" />
-                <div className="h-[90px] rounded-[10px] bg-[#F59ACC] dark:bg-[#FC734D]/85" />
-                <div className="h-[90px] rounded-[10px] bg-[#3B66C4]/80 dark:bg-[#0297DE]/85" />
+
+              {/* 3 мини-карточки моделей с иконками и характеристиками */}
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="p-2 rounded-xl bg-[#09318D]/10 dark:bg-[#1E3A8A]/50 border border-[#09318D]/15 dark:border-white/10 flex flex-col justify-between h-[84px] text-left">
+                  <MessageSquare className="w-4 h-4 text-[#09318D] dark:text-[#38BDF8]" />
+                  <div>
+                    <div className="text-[11px] font-bold text-[#09318D] dark:text-white leading-tight">
+                      Text 2.5
+                    </div>
+                    <div className="text-[9px] text-[#09318D]/70 dark:text-slate-400">
+                      128K ctx
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-xl bg-[#F59ACC]/20 dark:bg-[#FC734D]/20 border border-[#F59ACC]/50 dark:border-[#FC734D]/40 flex flex-col justify-between h-[84px] text-left">
+                  <Code2 className="w-4 h-4 text-[#D95B9E] dark:text-[#FC734D]" />
+                  <div>
+                    <div className="text-[11px] font-bold text-[#09318D] dark:text-white leading-tight">
+                      Code Pro
+                    </div>
+                    <div className="text-[9px] text-[#09318D]/70 dark:text-slate-400">
+                      TS / Py / Rust
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-xl bg-sky-500/15 dark:bg-[#0297DE]/25 border border-sky-500/30 dark:border-[#0297DE]/40 flex flex-col justify-between h-[84px] text-left">
+                  <ImageIcon className="w-4 h-4 text-[#0297DE]" />
+                  <div>
+                    <div className="text-[11px] font-bold text-[#09318D] dark:text-white leading-tight">
+                      Vision 4K
+                    </div>
+                    <div className="text-[9px] text-[#09318D]/70 dark:text-slate-400">
+                      UI & Render
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="w-2/3 h-3.5 rounded-full bg-[#F59ACC] dark:bg-[#FC734D]" />
+
+              {/* Индикатор доступности */}
+              <div className="flex items-center justify-between text-[11px] text-[#09318D]/75 dark:text-slate-400 pt-1 border-t border-[#09318D]/10 dark:border-white/10">
+                <span>Готовность кластера</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">99.9%</span>
+              </div>
             </div>
 
             {/* Card 2 (Центральная карточка: нежно-розовая в светлой теме как на фото, оранжево-розовая в тёмной) */}
@@ -161,15 +206,33 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </svg>
             </div>
 
-            {/* Card 3 */}
+            {/* Card 3: Реальный пайплайн выполнения запросов */}
             <div className="p-5 rounded-2xl bg-white/95 dark:bg-[#0E1A3B]/90 border border-[#09318D]/20 dark:border-[#0297DE]/35 backdrop-blur-md flex flex-col justify-between shadow-sm">
-              <div className="text-sm font-semibold text-[#09318D] dark:text-slate-200 mb-4">
-                Пайплайн генерации API
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-semibold text-[#09318D] dark:text-slate-200">
+                  Пайплайн генерации API
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-[#09318D]/10 dark:bg-white/10 text-[10px] font-mono text-[#09318D] dark:text-slate-300">
+                  42ms ping
+                </span>
               </div>
-              <div className="space-y-3.5 my-auto">
-                <div className="w-full h-6 rounded-md bg-[#09318D]/10 dark:bg-[#1E293B]" />
-                <div className="w-4/5 h-4 rounded-md bg-[#F59ACC] dark:bg-[#FC734D]" />
-                <div className="w-3/5 h-4 rounded-md bg-[#09318D] dark:bg-[#0297DE]" />
+
+              <div className="space-y-2 my-auto font-mono text-xs">
+                <div className="p-2 rounded-lg bg-[#09318D]/5 dark:bg-[#070E24] border border-[#09318D]/15 dark:border-white/10 flex items-center justify-between">
+                  <span className="text-[#09318D] dark:text-[#38BDF8] truncate">POST /v1/chat/completions</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                    200 OK
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-[#09318D]/5 dark:bg-[#070E24] border border-[#09318D]/15 dark:border-white/10 flex items-center justify-between">
+                  <span className="text-[#09318D]/80 dark:text-slate-300 text-[11px]">Stream: active (SSE)</span>
+                  <span className="text-[11px] font-bold text-[#F59ACC] dark:text-[#FC734D]">120 tok/s</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-[#09318D]/75 dark:text-slate-400 pt-2 border-t border-[#09318D]/10 dark:border-white/10">
+                <span>Шлюз</span>
+                <span className="font-semibold text-[#09318D] dark:text-white">api.patrik.ai</span>
               </div>
             </div>
           </div>
