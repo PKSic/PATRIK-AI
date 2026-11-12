@@ -1209,7 +1209,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               </div>
 
               {/* Быстрые темы для мгновенного авто-ответа */}
-              <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-50/70 via-white/80 to-amber-50/70 dark:from-[#0297DE]/15 dark:via-[#0E1A3B] dark:to-[#FC734D]/15 border border-[#0297DE]/20 dark:border-white/10 space-y-2 shadow-sm">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-50/80 via-slate-50/90 to-indigo-50/80 dark:from-[#0297DE]/15 dark:via-[#0E1A3B]/90 dark:to-[#FC734D]/15 border border-[#0297DE]/20 dark:border-white/10 space-y-2 shadow-xs">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-[#FC734D]" />
                   <span>Быстрые темы с мгновенным авто-ответом:</span>
@@ -1220,7 +1220,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                       key={topic.id}
                       type="button"
                       onClick={() => handleSelectTopic(topic)}
-                      className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white dark:bg-[#132044] hover:bg-[#0297DE]/10 dark:hover:bg-[#0297DE]/20 border border-slate-200 dark:border-white/10 hover:border-[#0297DE]/40 text-xs font-medium text-slate-800 dark:text-slate-200 hover:text-[#0297DE] transition-all cursor-pointer shadow-sm"
+                      className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white dark:bg-[#132044] hover:bg-[#0297DE]/10 dark:hover:bg-[#0297DE]/20 border border-slate-200/90 dark:border-white/10 hover:border-[#0297DE]/40 text-xs font-medium text-slate-800 dark:text-slate-200 hover:text-[#0297DE] transition-all cursor-pointer shadow-xs"
                     >
                       <span>{topic.icon}</span>
                       <span>{topic.title}</span>
@@ -1234,14 +1234,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 <div
                   className={`p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
                     supportNotice.type === 'ok'
-                      ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
-                      : 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
+                      ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400'
                   }`}
                 >
                   {supportNotice.type === 'ok' ? (
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500 dark:text-emerald-400" />
                   ) : (
-                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500 dark:text-rose-400" />
                   )}
                   <span>{supportNotice.text}</span>
                 </div>
@@ -1255,7 +1255,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                       <MessageSquare className="w-6 h-6" />
                     </div>
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
-                      Здравствуйте{user.full_name && user.full_name.trim() !== '1' ? `, ${user.full_name}` : ''}!
+                      Здравствуйте{user.full_name && !/^\d+$/.test(user.full_name.trim()) ? `, ${user.full_name}` : ''}!
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
                       Выберите одну из кнопок тем выше для мгновенного ответа бота или задайте свой

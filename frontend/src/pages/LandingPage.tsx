@@ -160,7 +160,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   Библиотека ИИ-моделей
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-xs shadow-emerald-500/50" />
                   3 онлайн
                 </span>
               </div>
