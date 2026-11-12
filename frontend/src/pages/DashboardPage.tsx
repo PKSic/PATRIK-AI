@@ -112,7 +112,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [supportText, setSupportText] = useState('');
   const [sendingSupport, setSendingSupport] = useState(false);
   const [loadingSupport, setLoadingSupport] = useState(false);
-  const [supportNotice, setSupportNotice] = useState<string | null>(null);
+  const [supportNotice, setSupportNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
     setProfileName(user.full_name || '');
@@ -164,8 +164,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           answer: topic.autoReply,
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { error: text || `Ошибка сервера (${res.status})` };
+      }
+      if (res.ok && data?.userMessage && data?.botMessage) {
         setSupportMessages((prev) => {
           const updated = [...prev, data.userMessage, data.botMessage];
           if (user?.id) {
@@ -173,11 +179,22 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           }
           return updated;
         });
-        setSupportNotice('✓ Тема выбрана. Бот заботы мгновенно ответил в чате!');
+        setSupportNotice({
+          type: 'ok',
+          text: '✓ Тема выбрана. Бот заботы мгновенно ответил в чате!',
+        });
         setTimeout(() => setSupportNotice(null), 5000);
+      } else {
+        setSupportNotice({
+          type: 'err',
+          text: data?.error || 'Не удалось получить ответ по теме',
+        });
       }
-    } catch (err) {
-      console.error('Failed to trigger support topic:', err);
+    } catch (err: any) {
+      setSupportNotice({
+        type: 'err',
+        text: err?.message || 'Сетевая ошибка при выборе темы',
+      });
     }
   };
 
@@ -281,8 +298,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         },
         body: JSON.stringify({ text: supportText.trim() }),
       });
-      const data = await res.json();
-      if (res.ok) {
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { error: text || `Ошибка сервера (${res.status})` };
+      }
+      if (res.ok && data) {
         const newMsg = data.message || data;
         setSupportMessages((prev) => {
           const updated = [...prev, newMsg];
@@ -292,13 +315,22 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           return updated;
         });
         setSupportText('');
-        setSupportNotice('✓ Сообщение отправлено! Администратор уведомлен в Telegram-боте.');
+        setSupportNotice({
+          type: 'ok',
+          text: '✓ Сообщение отправлено! Администратор уведомлен в Telegram-боте.',
+        });
         setTimeout(() => setSupportNotice(null), 5000);
       } else {
-        setSupportNotice(data.error || 'Ошибка отправки сообщения');
+        setSupportNotice({
+          type: 'err',
+          text: data?.error || 'Ошибка отправки сообщения',
+        });
       }
     } catch (err: any) {
-      setSupportNotice(err?.message || 'Сетевая ошибка');
+      setSupportNotice({
+        type: 'err',
+        text: err?.message || 'Сетевая ошибка',
+      });
     } finally {
       setSendingSupport(false);
     }
@@ -1143,9 +1175,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
               {/* Notice */}
               {supportNotice && (
-                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-medium flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>{supportNotice}</span>
+                <div
+                  className={`p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
+                    supportNotice.type === 'ok'
+                      ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                      : 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
+                  }`}
+                >
+                  {supportNotice.type === 'ok' ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                  )}
+                  <span>{supportNotice.text}</span>
                 </div>
               )}
 
@@ -1157,7 +1199,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                       <MessageSquare className="w-6 h-6" />
                     </div>
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
-                      Здравствуйте, {user.full_name}!
+                      Здравствуйте{user.full_name && user.full_name.trim() !== '1' ? `, ${user.full_name}` : ''}!
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
                       Выберите одну из кнопок тем выше для мгновенного ответа бота или задайте свой

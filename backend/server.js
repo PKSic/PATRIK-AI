@@ -22,29 +22,24 @@ app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(helmet());
 
-// Ограничиваем CORS локальным фронтендом, доменом Vercel или ALLOWED_ORIGIN из .env
-const ALLOWED_ORIGINS = new Set([
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : []),
-  ...(process.env.ALLOWED_ORIGIN ? [process.env.ALLOWED_ORIGIN] : []),
-]);
-
+// Настройка CORS: разрешаем обращения с любых доменов Vercel, localhost и мобильных клиентов
 app.use(
   cors({
-    origin(origin, callback) {
-      if (
-        !origin ||
-        ALLOWED_ORIGINS.has(origin) ||
-        /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)
-      ) {
-        return callback(null, true);
-      }
-      return callback(new Error('CORS policy blocked'));
-    },
+    origin: true,
     credentials: true,
   })
 );
+
+// Нормализация URL для работы как локально, так и на Vercel Serverless
+app.use((req, _res, next) => {
+  const fwd = req.headers['x-forwarded-uri'] || req.headers['x-matched-path'];
+  if (fwd && !fwd.includes('.js')) {
+    req.url = fwd;
+  } else if (!req.url.startsWith('/api/') && req.url !== '/api') {
+    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+  }
+  next();
+});
 
 // Ограничение размера JSON-тела (защита от DoS)
 app.use(express.json({ limit: '32kb' }));
@@ -276,7 +271,12 @@ function escapeHtml(str) {
 async function notifyAdminInTelegram(user, messageText) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_ADMIN_CHAT_ID) return;
   try {
-    const timeStr = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
+    let timeStr = new Date().toISOString();
+    try {
+      timeStr = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
+    } catch {
+      timeStr = new Date().toISOString();
+    }
     const text =
       `📬 <b>Новое обращение в поддержку PATRIK AI</b>\n\n` +
       `👤 <b>Пользователь:</b> ${escapeHtml(user.full_name || 'Без имени')}\n` +
@@ -1719,10 +1719,15 @@ app.post('/api/admin/support/messages/:userId', requireAuth, requireAdmin, async
   });
 });
 
-// Глобальный обработчик ошибок (не раскрывает стек-трейс клиенту)
+// Гарантированный JSON-ответ для любых неизвестных роутов API (не отдаёт HTML)
+app.all('/api/*', (_req, res) => {
+  res.status(404).json({ error: 'Эндпоинт API не найден' });
+});
+
+// Глобальный обработчик ошибок (не раскрывает стек-трейс клиенту, всегда возвращает JSON)
 app.use((err, _req, res, _next) => {
-  console.error(err.message);
-  res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  console.error('API Error:', err?.message || err);
+  res.status(500).json({ error: err?.message || 'Внутренняя ошибка сервера' });
 });
 
 if (!process.env.VERCEL) {
